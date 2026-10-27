@@ -20,7 +20,8 @@ export async function collectForSource(source: Source, options: CollectOptions =
     return collectFeed(
       {
         url: source.feedUrl,
-        format: source.format === "json" || source.format === "csv" ? source.format : "auto",
+        format:
+          source.format === "json" || source.format === "csv" || source.format === "xml" ? source.format : "auto",
         fieldMap: source.fieldMap,
       },
       options.now ?? new Date(),

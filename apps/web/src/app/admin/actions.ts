@@ -662,7 +662,14 @@ export async function salvarFonte(form: FormData): Promise<void> {
     kind: text(form, "tipo") === "page" ? "page" : "feed",
     maxAgeHours: Number(text(form, "validade") || "24"),
     access: feedUrl === null ? "unknown" : "partner-feed",
-    format: text(form, "formato") === "csv" ? "csv" : text(form, "formato") === "json" ? "json" : "unknown",
+    format:
+      text(form, "formato") === "csv"
+        ? "csv"
+        : text(form, "formato") === "json"
+          ? "json"
+          : text(form, "formato") === "xml"
+            ? "xml"
+            : "unknown",
     coversBrl: bool(form, "cobreBrl"),
     cadenceHours: Number(text(form, "cadencia") || "24"),
     feedUrl,

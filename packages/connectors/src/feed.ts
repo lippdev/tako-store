@@ -4,6 +4,7 @@
 import type { ActivationPlatform, Availability } from "@tako/domain";
 import { validateOfferRow, type ConnectorOutput, type RawOffer, type RowError } from "./connector";
 import { parseCsv } from "./importer";
+import { xmlRecords } from "./xml";
 
 /** Campos canônicos que o de-para pode apontar. */
 export const CANONICAL_FIELDS = [
@@ -27,7 +28,7 @@ export type CanonicalField = (typeof CANONICAL_FIELDS)[number];
 
 export interface FeedConfig {
   url: string;
-  format: "json" | "csv" | "auto";
+  format: "json" | "csv" | "xml" | "auto";
   /** Canônico → nome do campo na fonte. Ex.: `{ priceCents: "preco_centavos" }`. */
   fieldMap: Record<string, string>;
   timeoutMs?: number;
@@ -121,15 +122,33 @@ export async function fetchFeedText(config: Pick<FeedConfig, "url" | "timeoutMs"
 /** Coleta de um feed: busca, detecta formato, aplica o de-para e valida cada linha. */
 export async function collectFeed(config: FeedConfig, now = new Date()): Promise<ConnectorOutput> {
   const fetched = await fetchFeedText(config);
+  const head = fetched.text.trimStart();
   const format =
     config.format === "auto"
-      ? fetched.contentType.includes("json") || fetched.text.trimStart().startsWith("[") || fetched.text.trimStart().startsWith("{")
+      ? fetched.contentType.includes("json") || head.startsWith("[") || head.startsWith("{")
         ? "json"
-        : "csv"
+        : fetched.contentType.includes("xml") || head.startsWith("<")
+          ? "xml"
+          : "csv"
       : config.format;
 
   let objects: unknown[];
-  if (format === "json") {
+  if (format === "xml") {
+    const { element, records } = xmlRecords(fetched.text);
+    if (records.length === 0) {
+      return {
+        rows: [],
+        errors: [
+          {
+            line: null,
+            code: "xml",
+            message: element === null ? "o feed não é XML válido" : `o XML não tem registros com campos dentro de <${element}>`,
+          },
+        ],
+      };
+    }
+    objects = records;
+  } else if (format === "json") {
     let parsed: unknown;
     try {
       parsed = JSON.parse(fetched.text);

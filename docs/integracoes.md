@@ -30,7 +30,9 @@ usuário, e o resultado é validado de novo antes do redirecionamento.
 `/admin/fontes` → **Conectar fonte por URL**.
 
 - **URL do feed**: `https://…` (o token, quando existir, vai na própria URL; a lista de fontes mostra só o host).
-- **Formato**: JSON, CSV ou detecção automática. O JSON pode ser uma lista ou `{ "items": [...] }` / `{ "data": [...] }`.
+- **Formato**: JSON, CSV, XML ou detecção automática. O JSON pode ser uma lista ou `{ "items": [...] }` /
+  `{ "data": [...] }`; o XML é lido como elementos repetidos dentro da raiz (`<item>`, `<produto>`, `<offer>`), com
+  CDATA e entidades (`&amp;`, `&ccedil;`).
 - **Mapa de campos**: uma linha por campo, `canonico=campo_na_fonte`. Exemplo:
 
   ```

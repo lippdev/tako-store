@@ -152,6 +152,7 @@ export default async function FontesPage({
               <select name="formato" defaultValue="auto">
                 <option value="auto">Detectar pelo conteúdo</option>
                 <option value="json">JSON</option>
+                <option value="xml">XML</option>
                 <option value="csv">CSV</option>
               </select>
             </label>
