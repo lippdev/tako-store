@@ -3,6 +3,10 @@
 import { redirect } from "next/navigation";
 import {
   addMediaAsset,
+  createAdminUser,
+  revokeUserSessions,
+  setAdminUserActive,
+  setAdminUserRole,
   deleteSection,
   decideMapping,
   finishIngestionRun,
@@ -15,18 +19,29 @@ import {
   setExternalIdentifier,
   setGameVisibility,
   setPrimaryMedia,
+  setProductPublished,
   setSectionPublished,
   setSourceEnabled,
   startIngestionRun,
   updateGame,
   updateSourceMatrix,
+  upsertProduct,
   upsertSection,
   upsertStore,
   writeAudit,
 } from "@tako/db";
 import { retryFailedRun } from "@tako/ingest";
+import {
+  disableMfa,
+  enableMfa,
+  generateTotpSecret,
+  mfaState,
+  storeMfaSecret,
+  verifyTotp,
+  verifyUserTotp,
+} from "@tako/db";
 import { isMediaKind, normalizeDomain, parseMediaUrl, type HomeRule, type MediaKind } from "@tako/domain";
-import { requirePermission, signIn, signOut } from "@/server/session";
+import { completeMfaSignIn, requirePermission, requireUser, signIn, signOut } from "@/server/session";
 
 function text(form: FormData, name: string): string {
   const value = form.get(name);
@@ -53,8 +68,19 @@ export async function entrar(form: FormData): Promise<void> {
   const email = text(form, "email");
   const password = text(form, "senha");
   const destination = text(form, "destino") === "" ? "/admin" : text(form, "destino");
-  const ok = await signIn(email, password);
-  redirect(ok ? destination : `/admin/entrar?erro=1&destino=${encodeURIComponent(destination)}`);
+  const result = await signIn(email, password, text(form, "codigo"));
+  if (result === "ok") redirect(destination);
+  if (result === "mfa") redirect(`/admin/entrar?mfa=1&destino=${encodeURIComponent(destination)}`);
+  redirect(`/admin/entrar?erro=1&destino=${encodeURIComponent(destination)}`);
+}
+
+/** Segunda etapa do login: só o código, com o pedido que o servidor guardou. */
+export async function entrarComCodigo(form: FormData): Promise<void> {
+  const destination = text(form, "destino") === "" ? "/admin" : text(form, "destino");
+  const result = await completeMfaSignIn(text(form, "codigo"));
+  if (result === "ok") redirect(destination);
+  if (result === "expired") redirect(`/admin/entrar?erro=1&destino=${encodeURIComponent(destination)}`);
+  redirect(`/admin/entrar?mfa=1&erro=1&destino=${encodeURIComponent(destination)}`);
 }
 
 export async function sair(): Promise<void> {
@@ -380,4 +406,127 @@ export async function reprocessarExecucao(form: FormData): Promise<void> {
   redirect(
     `/admin/fontes?ok=reprocessado&resolvidos=${String(summary?.resolved ?? 0)}&tentados=${String(summary?.retried ?? 0)}`,
   );
+}
+
+const ROLES = new Set(["admin", "catalog", "content", "integrations", "viewer"]);
+
+/** Usuário do painel (PRD §12.1): criar, trocar papel, desativar e revogar sessões. */
+export async function salvarUsuario(form: FormData): Promise<void> {
+  const actor = await requirePermission("users:write");
+  const name = text(form, "nome");
+  const email = text(form, "email").toLowerCase();
+  const role = text(form, "papel");
+  const password = text(form, "senha");
+  if (email === "" || name === "" || !ROLES.has(role)) redirect("/admin/usuarios?erro=dados");
+  if (password !== "" && password.length < 12) redirect("/admin/usuarios?erro=senha");
+  if (password === "") redirect("/admin/usuarios?erro=senha");
+
+  const user = await createAdminUser({ email, name, role: role as "admin" | "catalog" | "content" | "integrations" | "viewer", password });
+  await writeAudit({
+    actor,
+    action: "usuario:salvar",
+    entity: "admin_user",
+    entityId: user.id,
+    detail: { email, papel: role },
+  });
+  redirect("/admin/usuarios?ok=salvo");
+}
+
+export async function alternarUsuario(form: FormData): Promise<void> {
+  const actor = await requirePermission("users:write");
+  const id = text(form, "id");
+  const active = bool(form, "ativo");
+  if (id === actor.id && !active) redirect("/admin/usuarios?erro=proprio-usuario");
+  await setAdminUserActive(id, active);
+  await writeAudit({ actor, action: `usuario:${active ? "ativar" : "desativar"}`, entity: "admin_user", entityId: id });
+  redirect("/admin/usuarios?ok=salvo");
+}
+
+export async function trocarPapel(form: FormData): Promise<void> {
+  const actor = await requirePermission("users:write");
+  const id = text(form, "id");
+  const role = text(form, "papel");
+  if (!ROLES.has(role)) redirect("/admin/usuarios?erro=dados");
+  if (id === actor.id && role !== "admin") redirect("/admin/usuarios?erro=proprio-usuario");
+  await setAdminUserRole(id, role as "admin" | "catalog" | "content" | "integrations" | "viewer");
+  await writeAudit({ actor, action: "usuario:papel", entity: "admin_user", entityId: id, detail: { papel: role } });
+  redirect("/admin/usuarios?ok=salvo");
+}
+
+export async function revogarSessoesDoUsuario(form: FormData): Promise<void> {
+  const actor = await requirePermission("users:write");
+  const id = text(form, "id");
+  const revoked = await revokeUserSessions(id);
+  await writeAudit({ actor, action: "usuario:revogar-sessoes", entity: "admin_user", entityId: id, detail: { sessoes: revoked } });
+  redirect(`/admin/usuarios?ok=sessoes&revogadas=${String(revoked)}`);
+}
+
+/** Produto comparável: jogo base, edição, DLC ou bundle (PRD §7.1, §12.2). */
+export async function salvarProduto(form: FormData): Promise<void> {
+  const user = await requirePermission("products:write");
+  const gameId = text(form, "jogoId");
+  const kind = text(form, "tipo");
+  const platform = text(form, "plataforma");
+  const kindValue = kind === "edition" || kind === "dlc" || kind === "bundle" ? kind : "base";
+  const platformValue =
+    platform === "steam" || platform === "epic" || platform === "gog" || platform === "xbox" ? platform : "other";
+  const product = await upsertProduct({
+    gameId,
+    kind: kindValue,
+    editionName: kindValue === "edition" ? optional(form, "edicao") : null,
+    platform: platformValue,
+    requiresProductId: optional(form, "requer"),
+  });
+  await writeAudit({
+    actor: user,
+    action: "produto:salvar",
+    entity: "product",
+    entityId: product.id,
+    detail: { jogo: gameId, tipo: product.kind, plataforma: product.platform },
+  });
+  redirect(`/admin/jogos/${gameId}?ok=produto`);
+}
+
+export async function alternarProduto(form: FormData): Promise<void> {
+  const user = await requirePermission("products:write");
+  const gameId = text(form, "jogoId");
+  const id = text(form, "id");
+  const published = bool(form, "publicado");
+  await setProductPublished(id, published);
+  await writeAudit({
+    actor: user,
+    action: `produto:${published ? "publicar" : "ocultar"}`,
+    entity: "product",
+    entityId: id,
+  });
+  redirect(`/admin/jogos/${gameId}?ok=produto`);
+}
+
+/** Segundo fator (PRD §12.1): gerar segredo, confirmar com um código e desligar exigindo código. */
+export async function gerarSegredoMfa(): Promise<void> {
+  const user = await requireUser("/admin/seguranca");
+  await storeMfaSecret(user.id, generateTotpSecret());
+  await writeAudit({ actor: user, action: "usuario:mfa-gerar", entity: "admin_user", entityId: user.id });
+  redirect("/admin/seguranca?ok=gerado");
+}
+
+export async function confirmarMfa(form: FormData): Promise<void> {
+  const user = await requireUser("/admin/seguranca");
+  const state = await mfaState(user.id);
+  const code = text(form, "codigo");
+  if (state === null || state.secret === null) redirect("/admin/seguranca?erro=sem-segredo");
+  if (!verifyTotp(state.secret, code)) redirect("/admin/seguranca?erro=codigo");
+
+  await enableMfa(user.id);
+  await writeAudit({ actor: user, action: "usuario:mfa-ativar", entity: "admin_user", entityId: user.id });
+  redirect("/admin/seguranca?ok=ativo");
+}
+
+export async function desativarMfaAction(form: FormData): Promise<void> {
+  const user = await requireUser("/admin/seguranca");
+  const code = text(form, "codigo");
+  if (!(await verifyUserTotp(user.id, code))) redirect("/admin/seguranca?erro=codigo");
+  await disableMfa(user.id);
+  await writeAudit({ actor: user, action: "usuario:mfa-desativar", entity: "admin_user", entityId: user.id });
+  redirect("/admin/seguranca?ok=desligado");
 }

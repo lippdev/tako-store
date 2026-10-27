@@ -1,6 +1,7 @@
 export * from "./pool";
 export * from "./mappers";
 export * from "./auth";
+export * from "./totp";
 export * from "./repositories/catalog";
 export * from "./repositories/commerce";
 export * from "./repositories/home";

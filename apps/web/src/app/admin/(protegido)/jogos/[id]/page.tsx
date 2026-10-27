@@ -10,12 +10,14 @@ import {
 } from "@tako/db";
 import { formatBRL, MEDIA_KINDS, MEDIA_KIND_LABELS } from "@tako/domain";
 import {
+  alternarProduto,
   publicarJogo,
   removerIdentificador,
   removerImagem,
   salvarIdentificador,
   salvarImagem,
   salvarJogo,
+  salvarProduto,
 } from "../../../actions";
 import styles from "../../../admin.module.css";
 
@@ -265,6 +267,10 @@ export default async function JogoPage({
 
       <section className={styles["card"]}>
         <h2>Produtos e ofertas</h2>
+        <p className={styles["muted"]}>
+          Jogo base, edição, DLC e bundle são produtos diferentes: chave Steam e chave Xbox nunca disputam o mesmo
+          menor preço.
+        </p>
         {ownProducts.length === 0 ? (
           <p className={styles["muted"]}>Nenhum produto cadastrado para este jogo.</p>
         ) : (
@@ -273,8 +279,10 @@ export default async function JogoPage({
               <tr>
                 <th>Produto</th>
                 <th>Plataforma</th>
+                <th>Publicado</th>
                 <th>Ofertas</th>
                 <th>Menor preço</th>
+                <th>Ações</th>
               </tr>
             </thead>
             <tbody>
@@ -287,14 +295,69 @@ export default async function JogoPage({
                       {product.requiresProductId !== null && <div className={styles["muted"]}>requer o jogo base</div>}
                     </td>
                     <td className={styles["muted"]}>{product.platform}</td>
+                    <td className={styles["muted"]}>{product.published ? "sim" : "não"}</td>
                     <td className={styles["muted"]}>{offers.length}</td>
                     <td>{cheapest === undefined ? "—" : formatBRL(cheapest.priceCents)}</td>
+                    <td>
+                      <form action={alternarProduto}>
+                        <input type="hidden" name="jogoId" value={game.id} />
+                        <input type="hidden" name="id" value={product.id} />
+                        <input type="hidden" name="publicado" value={product.published ? "0" : "1"} />
+                        <button type="submit" className={styles["secondary"]}>
+                          {product.published ? "Despublicar" : "Publicar"}
+                        </button>
+                      </form>
+                    </td>
                   </tr>
                 );
               })}
             </tbody>
           </table>
         )}
+        <form action={salvarProduto} className={styles["form"]}>
+          <input type="hidden" name="jogoId" value={game.id} />
+          <div className={styles["grid2"]}>
+            <label className={styles["field"]}>
+              <span>Tipo</span>
+              <select name="tipo" defaultValue="base">
+                <option value="base">Jogo base</option>
+                <option value="edition">Edição</option>
+                <option value="dlc">DLC</option>
+                <option value="bundle">Bundle</option>
+              </select>
+            </label>
+            <label className={styles["field"]}>
+              <span>Plataforma de ativação</span>
+              <select name="plataforma" defaultValue="steam">
+                <option value="steam">Steam</option>
+                <option value="epic">Epic</option>
+                <option value="gog">GOG</option>
+                <option value="xbox">Xbox</option>
+                <option value="other">Outra</option>
+              </select>
+            </label>
+            <label className={styles["field"]}>
+              <span>Nome da edição (só para edição)</span>
+              <input name="edicao" placeholder="Deluxe" />
+            </label>
+            <label className={styles["field"]}>
+              <span>Requer produto (DLC/bundle)</span>
+              <select name="requer" defaultValue="">
+                <option value="">Nenhum</option>
+                {ownProducts.map((product) => (
+                  <option key={product.id} value={product.id}>
+                    {product.kind === "edition" ? `Edição ${product.editionName ?? ""}` : product.kind} · {product.platform}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+          <div className={styles["actions"]}>
+            <button type="submit" className={styles["primary"]}>
+              Salvar produto
+            </button>
+          </div>
+        </form>
       </section>
     </>
   );

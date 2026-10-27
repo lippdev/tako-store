@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
+import { can } from "@tako/db";
 import { Marca } from "@/components/Marca/Marca";
 import { requireUser } from "@/server/session";
 import { sair } from "../actions";
@@ -15,6 +16,7 @@ const NAV = [
   ["/admin/fontes", "Fontes"],
   ["/admin/home", "Home"],
   ["/admin/qualidade", "Qualidade"],
+  ["/admin/auditoria", "Auditoria"],
 ] as const;
 
 /** Casca do painel: só entra quem tem sessão; o papel é verificado em cada ação. */
@@ -32,6 +34,8 @@ export default async function PainelLayout({ children }: { children: ReactNode }
               {label}
             </Link>
           ))}
+          {can(user.role, "users:write") && <Link href="/admin/usuarios">Usuários</Link>}
+          <Link href="/admin/seguranca">Segurança</Link>
         </nav>
         <div className={styles["sideFoot"]}>
           <span>
