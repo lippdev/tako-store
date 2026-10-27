@@ -57,6 +57,9 @@ export interface Source {
   attribution: string | null;
   /** Estágio da fonte na matriz: candidata, em avaliação, aprovada ou recusada (PAR-004). */
   status: SourceStatus;
+  /** Última execução registrada e falhas consecutivas: o alerta de integração (OPS-001). */
+  lastRunAt: string | null;
+  consecutiveFailures: number;
 }
 
 export const SOURCE_ACCESSES = ["api", "partner-feed", "public-page", "unknown"] as const;

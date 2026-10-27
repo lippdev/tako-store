@@ -335,3 +335,28 @@
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+.thumb {
+  display: block;
+  width: 96px;
+  height: 54px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+  background: var(--surface-raised);
+  object-fit: cover;
+}
+.group {
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  background: var(--surface-raised);
+}
+.group + .group {
+  margin-top: 12px;
+}
+.groupList {
+  margin: 8px 0 12px;
+  padding-left: 18px;
+  color: var(--text-dim);
+  font-size: 13px;
+}

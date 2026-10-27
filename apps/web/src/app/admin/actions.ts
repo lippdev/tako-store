@@ -2,20 +2,30 @@
 
 import { redirect } from "next/navigation";
 import {
+  addMediaAsset,
   deleteSection,
   decideMapping,
   finishIngestionRun,
   getGameById,
+  listMediaAssets,
+  mergeGames,
+  removeExternalIdentifier,
+  removeMediaAsset,
+  replacePrimaryImage,
+  setExternalIdentifier,
   setGameVisibility,
+  setPrimaryMedia,
   setSectionPublished,
   setSourceEnabled,
   startIngestionRun,
   updateGame,
+  updateSourceMatrix,
   upsertSection,
   upsertStore,
   writeAudit,
 } from "@tako/db";
-import { normalizeDomain, type HomeRule } from "@tako/domain";
+import { retryFailedRun } from "@tako/ingest";
+import { isMediaKind, normalizeDomain, parseMediaUrl, type HomeRule, type MediaKind } from "@tako/domain";
 import { requirePermission, signIn, signOut } from "@/server/session";
 
 function text(form: FormData, name: string): string {
@@ -88,8 +98,6 @@ export async function salvarJogo(form: FormData): Promise<void> {
     developers: list(form, "desenvolvedoras"),
     publishers: list(form, "distribuidoras"),
     genres: list(form, "generos"),
-    coverUrl: optional(form, "capa"),
-    heroUrl: optional(form, "fundo"),
   };
   const after = await updateGame(id, patch);
   await writeAudit({
@@ -207,4 +215,164 @@ export async function removerSecao(form: FormData): Promise<void> {
   await deleteSection(slug);
   await writeAudit({ actor: user, action: "home:remover", entity: "home_section", entityId: slug });
   redirect("/admin/home?ok=1");
+}
+
+const PRIMARY_KINDS = new Set<MediaKind>(["cover", "hero", "logo"]);
+
+/** Imagem com procedência (CAT-005): capa, fundo e logo substituem a anterior; captura entra na galeria. */
+export async function salvarImagem(form: FormData): Promise<void> {
+  const user = await requirePermission("games:write");
+  const gameId = text(form, "jogoId");
+  const game = await getGameById(gameId);
+  if (game === null) redirect("/admin/jogos?erro=nao-encontrado");
+
+  const kindValue = text(form, "tipo");
+  const kind: MediaKind = isMediaKind(kindValue) ? kindValue : "screenshot";
+  const parsed = parseMediaUrl(text(form, "endereco"));
+  const origin = text(form, "origem");
+  if (!parsed.ok || origin.length < 3) {
+    redirect(`/admin/jogos/${gameId}?erro=imagem`);
+  }
+
+  const input = {
+    gameId,
+    kind,
+    url: parsed.url,
+    origin,
+    attribution: optional(form, "atribuicao"),
+  };
+  if (PRIMARY_KINDS.has(kind)) {
+    await replacePrimaryImage(input);
+    await setPrimaryMedia(gameId, kind === "cover" ? "cover" : kind === "hero" ? "hero" : "logo", parsed.url);
+  } else {
+    await addMediaAsset(input);
+  }
+  await writeAudit({
+    actor: user,
+    action: "jogo:imagem",
+    entity: "game",
+    entityId: gameId,
+    detail: { tipo: kind, url: parsed.url, origem: origin },
+  });
+  redirect(`/admin/jogos/${gameId}?ok=imagem`);
+}
+
+/** Remove a imagem e, se ela era a principal do tipo, aponta a mais recente que sobrou (ou nenhuma). */
+export async function removerImagem(form: FormData): Promise<void> {
+  const user = await requirePermission("games:write");
+  const id = text(form, "id");
+  const removed = await removeMediaAsset(id);
+  if (removed === null) redirect("/admin/jogos?erro=nao-encontrado");
+
+  if (PRIMARY_KINDS.has(removed.kind)) {
+    const remaining = (await listMediaAssets(removed.gameId)).filter((asset) => asset.kind === removed.kind);
+    const next = remaining.sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
+    await setPrimaryMedia(removed.gameId, removed.kind === "cover" ? "cover" : removed.kind === "hero" ? "hero" : "logo", next?.url ?? null);
+  }
+  await writeAudit({
+    actor: user,
+    action: "jogo:imagem-remover",
+    entity: "game",
+    entityId: removed.gameId,
+    detail: { tipo: removed.kind, url: removed.url },
+  });
+  redirect(`/admin/jogos/${removed.gameId}?ok=imagem`);
+}
+
+/** Identificador do jogo numa fonte externa (CAT-007). */
+export async function salvarIdentificador(form: FormData): Promise<void> {
+  const user = await requirePermission("games:write");
+  const gameId = text(form, "jogoId");
+  const sourceId = text(form, "fonteId");
+  const externalId = text(form, "identificador");
+  if (sourceId === "" || externalId === "") redirect(`/admin/jogos/${gameId}?erro=identificador`);
+
+  await setExternalIdentifier(gameId, sourceId, externalId);
+  await writeAudit({
+    actor: user,
+    action: "jogo:identificador",
+    entity: "game",
+    entityId: gameId,
+    detail: { fonte: sourceId, identificador: externalId },
+  });
+  redirect(`/admin/jogos/${gameId}?ok=identificador`);
+}
+
+export async function removerIdentificador(form: FormData): Promise<void> {
+  const user = await requirePermission("games:write");
+  const gameId = text(form, "jogoId");
+  const sourceId = text(form, "fonteId");
+  await removeExternalIdentifier(gameId, sourceId);
+  await writeAudit({ actor: user, action: "jogo:identificador-remover", entity: "game", entityId: gameId, detail: { fonte: sourceId } });
+  redirect(`/admin/jogos/${gameId}?ok=identificador`);
+}
+
+/** União de duplicata (CAT-008): o jogo duplicado é arquivado e a união fica no histórico. */
+export async function unirJogos(form: FormData): Promise<void> {
+  const user = await requirePermission("games:write");
+  const survivorId = text(form, "principalId");
+  const duplicateId = text(form, "duplicadoId");
+  try {
+    const result = await mergeGames({ survivorId, duplicateId, actorEmail: user.email });
+    console.log(result.summary);
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : "erro desconhecido";
+    await writeAudit({
+      actor: user,
+      action: "jogo:unir-falhou",
+      entity: "game",
+      entityId: survivorId,
+      detail: { duplicado: duplicateId, motivo: reason },
+    });
+    redirect(`/admin/duplicatas?erro=${encodeURIComponent(reason)}`);
+  }
+  redirect("/admin/duplicatas?ok=uniao");
+}
+
+/** Matriz de fontes (PAR-004): acesso, formato, cobertura em BRL, frequência, links e atribuição. */
+export async function salvarMatrizFonte(form: FormData): Promise<void> {
+  const user = await requirePermission("sources:write");
+  const id = text(form, "id");
+  const access = text(form, "acesso");
+  const format = text(form, "formato");
+  const status = text(form, "situacao");
+  const cadence = optional(form, "frequencia");
+  await updateSourceMatrix(id, {
+    access:
+      access === "api" || access === "partner-feed" || access === "public-page" || access === "unknown" ? access : "unknown",
+    format: format === "json" || format === "csv" || format === "xml" || format === "html" ? format : "unknown",
+    coversBrl: bool(form, "cobreBrl"),
+    cadenceHours: cadence === null || Number.isNaN(Number(cadence)) ? null : Number(cadence),
+    docsUrl: optional(form, "documentacao"),
+    termsUrl: optional(form, "termos"),
+    attribution: optional(form, "atribuicao"),
+    status:
+      status === "candidate" || status === "evaluating" || status === "approved" || status === "rejected"
+        ? status
+        : "candidate",
+    notes: optional(form, "observacoes"),
+  });
+  await writeAudit({ actor: user, action: "fonte:matriz", entity: "source", entityId: id, detail: { acesso: access, formato: format, situacao: status } });
+  redirect("/admin/fontes?ok=matriz");
+}
+
+/** Reprocessa os erros de uma execução (OFR-006), pelo painel, com o mesmo código do worker. */
+export async function reprocessarExecucao(form: FormData): Promise<void> {
+  const user = await requirePermission("sources:write");
+  const runId = text(form, "execucaoId");
+  try {
+    const summary = await retryFailedRun(runId, user.email);
+    await writeAudit({
+      actor: user,
+      action: "fonte:reprocessar",
+      entity: "ingestion_run",
+      entityId: runId,
+      detail: { novaExecucao: summary.runId, resolvidos: summary.resolved, tentados: summary.retried },
+    });
+    redirect(`/admin/fontes?ok=reprocessado&resolvidos=${String(summary.resolved)}&tentados=${String(summary.retried)}`);
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : "erro desconhecido";
+    await writeAudit({ actor: user, action: "fonte:reprocessar-falhou", entity: "ingestion_run", entityId: runId, detail: { motivo: reason } });
+    redirect(`/admin/fontes?erro=${encodeURIComponent(reason)}`);
+  }
 }

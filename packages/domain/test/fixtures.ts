@@ -39,6 +39,8 @@ export function source(overrides: Partial<Source> = {}): Source {
     termsUrl: null,
     attribution: null,
     status: "approved",
+    lastRunAt: null,
+    consecutiveFailures: 0,
     ...overrides,
   };
 }

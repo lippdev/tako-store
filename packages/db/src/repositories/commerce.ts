@@ -7,7 +7,7 @@ import { toOffer, toSource, toStore, type OfferRow, type SourceRow, type StoreRo
 
 const STORE_COLUMNS = `id, slug, name, partner_status, enabled, allowed_domains, link_kind, attribution, regions, currencies`;
 const SOURCE_COLUMNS = `id, slug, name, kind, enabled, max_age_hours, regions, currencies, notes, access, format,
-  covers_brl, cadence_hours, docs_url, terms_url, attribution, status`;
+  covers_brl, cadence_hours, docs_url, terms_url, attribution, status, last_run_at, consecutive_failures`;
 const OFFER_COLUMNS = `id, product_id, store_id, source_id, price_cents, reference_price_cents, currency, region,
   platform, availability, coupon, subscription, url, observed_at`;
 
@@ -142,6 +142,40 @@ export async function upsertSource(input: SourceInput): Promise<Source> {
   );
   if (row === null) throw new Error("upsert de fonte não devolveu linha");
   return toSource(row);
+}
+
+/** Matriz de fontes (PAR-004): o que se sabe da fonte candidata, sem mexer em slug, nome ou tipo. */
+export async function updateSourceMatrix(
+  id: string,
+  patch: {
+    access: Source["access"];
+    format: Source["format"];
+    coversBrl: boolean;
+    cadenceHours: number | null;
+    docsUrl: string | null;
+    termsUrl: string | null;
+    attribution: string | null;
+    status: Source["status"];
+    notes: string | null;
+  },
+): Promise<void> {
+  await query(
+    `update sources set access = $2, format = $3, covers_brl = $4, cadence_hours = $5, docs_url = $6,
+       terms_url = $7, attribution = $8, status = $9, notes = $10, updated_at = now()
+     where id = $1`,
+    [
+      id,
+      patch.access,
+      patch.format,
+      patch.coversBrl,
+      patch.cadenceHours,
+      patch.docsUrl,
+      patch.termsUrl,
+      patch.attribution,
+      patch.status,
+      patch.notes,
+    ],
+  );
 }
 
 export async function setSourceEnabled(id: string, enabled: boolean): Promise<void> {
@@ -297,6 +331,8 @@ export interface IngestionRun {
   startedAt: string;
   finishedAt: string | null;
   errors: number;
+  /** Erros ainda abertos: a fila de reprocessamento (OFR-006). */
+  openErrors: number;
 }
 
 export async function listIngestionRuns(limit = 30): Promise<IngestionRun[]> {
@@ -304,7 +340,8 @@ export async function listIngestionRuns(limit = 30): Promise<IngestionRun[]> {
     `select r.id, r.source_id as "sourceId", s.slug as "sourceSlug", s.name as "sourceName", r.status, r.triggered_by as "triggeredBy",
             r.received, r.accepted, r.rejected, r.message,
             r.started_at as "startedAt", r.finished_at as "finishedAt",
-            (select count(*)::int from ingestion_errors e where e.run_id = r.id) as errors
+            (select count(*)::int from ingestion_errors e where e.run_id = r.id) as errors,
+            (select count(*)::int from ingestion_errors e where e.run_id = r.id and e.resolved_at is null) as "openErrors"
      from ingestion_runs r join sources s on s.id = r.source_id
      order by r.started_at desc limit $1`,
     [limit],

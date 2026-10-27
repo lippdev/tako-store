@@ -121,6 +121,8 @@ export interface SourceRow {
   terms_url: string | null;
   attribution: string | null;
   status: Source["status"];
+  last_run_at: string | null;
+  consecutive_failures: number;
 }
 
 export function toSource(row: SourceRow): Source {
@@ -142,6 +144,8 @@ export function toSource(row: SourceRow): Source {
     termsUrl: row.terms_url,
     attribution: row.attribution,
     status: row.status,
+    lastRunAt: row.last_run_at,
+    consecutiveFailures: row.consecutive_failures,
   };
 }
 

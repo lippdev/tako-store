@@ -8,6 +8,7 @@ import styles from "../admin.module.css";
 const NAV = [
   ["/admin", "Visão geral"],
   ["/admin/jogos", "Jogos"],
+  ["/admin/duplicatas", "Duplicatas"],
   ["/admin/vinculos", "Vínculos"],
   ["/admin/ofertas", "Ofertas"],
   ["/admin/lojas", "Lojas"],
