@@ -1,0 +1,19 @@
+# Serviço da loja e do painel. Copie para /etc/systemd/system/, ajuste os caminhos e habilite:
+#   sudo systemctl daemon-reload && sudo systemctl enable --now tako-web
+[Unit]
+Description=Tako Store — loja, painel e API
+After=network.target postgresql.service
+
+[Service]
+Type=simple
+User=tako
+WorkingDirectory=/srv/tako-store
+EnvironmentFile=/etc/tako-store/env
+ExecStart=/usr/bin/npm run start
+Restart=always
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

@@ -171,7 +171,19 @@ export const demoFileConnector: Connector & { collect: (input: CollectInput) => 
   },
 };
 
-export const CONNECTORS: readonly Connector[] = [demoFileConnector];
+/**
+ * Fonte "feed" de demonstração: lê o mesmo arquivo local, mas se apresenta como feed. Serve para exercitar o
+ * caminho de uma fonte que não é arquivo enviado à mão, sem depender de rede.
+ */
+export const demoFeedConnector: Connector & { collect: (input: CollectInput) => Promise<ConnectorOutput> } = {
+  ...demoFileConnector,
+  slug: "feed-demo",
+  name: "Feed de demonstração",
+  access: "feed",
+  notes: "Feed fictício servido do mesmo arquivo local da fonte de arquivo; nenhum acesso externo.",
+};
+
+export const CONNECTORS: readonly Connector[] = [demoFileConnector, demoFeedConnector];
 
 export function connectorFor(sourceSlug: string): Connector | null {
   return CONNECTORS.find((connector) => connector.slug === sourceSlug) ?? null;

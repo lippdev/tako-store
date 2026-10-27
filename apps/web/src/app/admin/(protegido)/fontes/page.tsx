@@ -1,17 +1,35 @@
 import { listIngestionErrorsDetailed, listIngestionRuns, listSources, runsWithOpenErrors } from "@tako/db";
 import { SOURCE_ACCESS_LABELS, SOURCE_STATUS_LABELS, sourceIsUsable, type SourceAccess, type SourceStatus } from "@tako/domain";
-import { alternarFonte, executarImportacao, reprocessarExecucao, salvarMatrizFonte } from "../../actions";
+import { alternarFonte, executarImportacao, reprocessarExecucao, salvarFonte, salvarMatrizFonte } from "../../actions";
 import styles from "../../admin.module.css";
 
 export const dynamic = "force-dynamic";
 
 /** Fontes e integrações: pausar, executar, ver execuções, reprocessar erros e a matriz de candidatas (PAR-004). */
+/** Host do feed, sem expor o token que costuma vir na URL. */
+function feedHost(url: string | null): string {
+  if (url === null || url.trim() === "") return "sem feed configurado";
+  try {
+    return `feed em ${new URL(url).hostname}`;
+  } catch {
+    return "feed com endereço inválido";
+  }
+}
+
 export default async function FontesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ ok?: string; erro?: string; resolvidos?: string; tentados?: string }>;
+  searchParams: Promise<{
+    ok?: string;
+    erro?: string;
+    resolvidos?: string;
+    tentados?: string;
+    aceitas?: string;
+    recusadas?: string;
+    detalhe?: string;
+  }>;
 }) {
-  const { ok, erro, resolvidos, tentados } = await searchParams;
+  const { ok, erro, resolvidos, tentados, aceitas, recusadas, detalhe } = await searchParams;
   const [sources, runs, openRuns] = await Promise.all([listSources(), listIngestionRuns(20), runsWithOpenErrors(10)]);
   const details = await Promise.all(
     openRuns.map(async (run) => ({ run, errors: await listIngestionErrorsDetailed(run.runId) })),
@@ -30,8 +48,22 @@ export default async function FontesPage({
           Reprocessamento concluído: {resolvidos ?? "0"} de {tentados ?? "0"} erro(s) resolvido(s).
         </div>
       )}
-      {ok !== undefined && ok !== "reprocessado" && <div className={styles["ok"]}>Fonte atualizada.</div>}
-      {erro !== undefined && <div className={styles["error"]}>{erro}</div>}
+      {ok === "executado" && (
+        <div className={styles["ok"]}>
+          Coleta concluída: {aceitas ?? "0"} oferta(s) gravada(s), {recusadas ?? "0"} linha(s) recusada(s).
+        </div>
+      )}
+      {ok !== undefined && ok !== "reprocessado" && ok !== "executado" && (
+        <div className={styles["ok"]}>Fonte atualizada.</div>
+      )}
+      {erro === "feed-https" && <div className={styles["error"]}>O feed precisa ser um endereço https.</div>}
+      {erro === "mapa" && (
+        <div className={styles["error"]}>Mapa de campos inválido: {detalhe ?? "confira as linhas canonico=campo"}.</div>
+      )}
+      {erro === "fonte" && <div className={styles["error"]}>Informe nome e slug da fonte.</div>}
+      {erro === "pausada" && <div className={styles["error"]}>A fonte está pausada; retome antes de executar.</div>}
+      {erro !== undefined &&
+        !["feed-https", "mapa", "fonte", "pausada"].includes(erro) && <div className={styles["error"]}>{erro}</div>}
 
       <section className={styles["card"]}>
         <h2>Fontes cadastradas</h2>
@@ -78,9 +110,9 @@ export default async function FontesPage({
                         </button>
                       </form>
                       <form action={executarImportacao}>
-                        <input type="hidden" name="id" value={source.id} />
+                        <input type="hidden" name="slug" value={source.slug} />
                         <button type="submit" className={styles["secondary"]}>
-                          Executar
+                          Executar agora
                         </button>
                       </form>
                     </div>
@@ -91,6 +123,75 @@ export default async function FontesPage({
           </tbody>
         </table>
         {sources.length === 0 && <p className={styles["muted"]}>Nenhuma fonte cadastrada.</p>}
+      </section>
+
+      <section className={styles["card"]}>
+        <h2>Conectar fonte por URL</h2>
+        <p className={styles["muted"]}>
+          O parceiro entrega um arquivo JSON ou CSV por URL. O de-para liga o nome do campo na fonte ao campo que a
+          Tako entende, uma linha por campo: <code>priceCents=preco_centavos</code>. Campos: externalId, title,
+          edition, platform, region, currency, priceCents, referencePriceCents, availability, url, coupon,
+          subscription, observedAt, storeSlug. Salvar com o slug de uma fonte existente atualiza aquela fonte.
+        </p>
+        <form action={salvarFonte} className={styles["form"]}>
+          <div className={styles["grid2"]}>
+            <label className={styles["field"]}>
+              <span>Nome</span>
+              <input name="nome" required placeholder="Feed do parceiro" />
+            </label>
+            <label className={styles["field"]}>
+              <span>Slug</span>
+              <input name="slug" placeholder="vem do nome" />
+            </label>
+            <label className={styles["field"]}>
+              <span>URL do feed (https)</span>
+              <input name="feedUrl" placeholder="https://parceiro.example/feed.csv?token=…" />
+            </label>
+            <label className={styles["field"]}>
+              <span>Formato</span>
+              <select name="formato" defaultValue="auto">
+                <option value="auto">Detectar pelo conteúdo</option>
+                <option value="json">JSON</option>
+                <option value="csv">CSV</option>
+              </select>
+            </label>
+            <label className={styles["field"]}>
+              <span>Tipo</span>
+              <select name="tipo" defaultValue="feed">
+                <option value="feed">Feed</option>
+                <option value="page">Página</option>
+              </select>
+            </label>
+            <label className={styles["field"]}>
+              <span>Validade do preço (horas)</span>
+              <input name="validade" type="number" min={1} defaultValue={24} />
+            </label>
+            <label className={styles["field"]}>
+              <span>Cadência de coleta (horas)</span>
+              <input name="cadencia" type="number" min={1} defaultValue={24} />
+            </label>
+            <label className={styles["field"]}>
+              <span>Cobre preço em BRL?</span>
+              <input type="checkbox" name="cobreBrl" defaultChecked />
+            </label>
+          </div>
+          <label className={styles["field"]}>
+            <span>Mapa de campos (canonico=campo_na_fonte)</span>
+            <textarea
+              name="mapa"
+              placeholder={"externalId=sku\npriceCents=preco_centavos\nurl=link\nstoreSlug=loja"}
+            />
+          </label>
+          <label className={styles["field"]}>
+            <span>Observações</span>
+            <textarea name="observacoes" />
+          </label>
+          <div className={styles["actions"]}>
+            <button type="submit" className={styles["primary"]}>
+              Salvar fonte
+            </button>
+          </div>
+        </form>
       </section>
 
       <section className={styles["card"]}>
@@ -105,6 +206,7 @@ export default async function FontesPage({
             <strong>{source.name}</strong>
             <p className={styles["muted"]}>
               {SOURCE_ACCESS_LABELS[source.access]} · {source.format} ·{" "}
+              {feedHost(source.feedUrl)} ·{" "}
               {source.coversBrl ? "cobre BRL" : "sem cobertura em BRL confirmada"} ·{" "}
               {source.cadenceHours === null ? "frequência não informada" : `coleta a cada ${String(source.cadenceHours)} h`}
             </p>

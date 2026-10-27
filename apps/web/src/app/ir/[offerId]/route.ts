@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getOfferById, listStores, recordOfferClick } from "@tako/db";
-import { isAllowedRedirect } from "@tako/domain";
+import { buildAffiliateLink } from "@tako/domain";
 
 /**
  * Redirecionamento para a loja (STO-004). O id da oferta é o único dado que vem do usuário: a URL de destino é a
@@ -15,10 +15,22 @@ export async function GET(_request: Request, { params }: { params: Promise<{ off
   if (store === undefined || !store.enabled) {
     return new NextResponse("Loja indisponível no momento.", { status: 404 });
   }
-  if (!isAllowedRedirect({ url: offer.url, storeAllowedDomains: store.allowedDomains })) {
-    return new NextResponse("Destino não permitido para esta loja.", { status: 403 });
+  // O link de afiliado da loja é aplicado aqui, no servidor: o usuário nunca informa destino, e o resultado
+  // continua preso ao domínio cadastrado (PAR-002, STO-004).
+  const link = buildAffiliateLink({
+    offerUrl: offer.url,
+    config: {
+      linkKind: store.linkKind,
+      affiliateParam: store.affiliateParam,
+      affiliateValue: store.affiliateValue,
+      affiliateTemplate: store.affiliateTemplate,
+      allowedDomains: store.allowedDomains,
+    },
+  });
+  if (!link.ok) {
+    return new NextResponse(`Destino não permitido para esta loja: ${link.error}`, { status: 403 });
   }
 
   await recordOfferClick(offer.id);
-  return NextResponse.redirect(offer.url, 302);
+  return NextResponse.redirect(link.url, 302);
 }

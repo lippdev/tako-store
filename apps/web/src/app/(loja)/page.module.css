@@ -1,11 +1,52 @@
+.heroCarousel {
+  margin-bottom: 48px;
+}
+.heroTrack {
+  display: flex;
+  gap: 16px;
+  margin: 0;
+  padding: 0;
+  overflow-x: auto;
+  list-style: none;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
+}
+.heroTrack::-webkit-scrollbar {
+  display: none;
+}
+.heroDots {
+  display: flex;
+  justify-content: center;
+  gap: 4px;
+  margin-top: 12px;
+}
+.heroDots a {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  color: var(--text-muted);
+}
+.heroDots a::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: currentColor;
+}
+.heroDots a:hover {
+  color: var(--text);
+}
 .hero {
   position: relative;
+  flex: 0 0 100%;
+  scroll-snap-align: start;
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 560px);
   align-items: end;
   gap: 32px;
   min-height: 380px;
-  margin-bottom: 48px;
   padding: 40px;
   overflow: hidden;
   border: 1px solid var(--line);

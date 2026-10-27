@@ -1,25 +1,24 @@
-// Worker de importação (PRD §15): coleta da fonte pela linha de comando e entrega ao pacote @tako/ingest, que
-// valida, vincula e grava. O mesmo código roda no painel quando o operador reprocessa erros (OFR-006).
+// Worker de coleta e importação (PRD §15). Comandos:
 //
 //   npm run worker -- sources
-//   npm run worker -- import --source arquivo-demo
-//   npm run worker -- import --source arquivo-demo --file ./catalogo.csv
-//   npm run worker -- retry --run <id da execução>
 //   npm run worker -- runs [--limit 10]
+//   npm run worker -- import --source arquivo-demo [--file ./catalogo.csv]
+//   npm run worker -- retry --run <id da execução>
+//   npm run worker -- due                 # uma passada pelas fontes com coleta devida
+//   npm run worker -- daemon [--interval 60]
+//
+// O agendador respeita `cadence_hours` de cada fonte: coleta a que está devida, registra a execução e volta a dormir.
+// Ele não substitui um supervisor de processo (systemd, container restart), só dispensa um cron por fonte.
 
-import { readFile } from "node:fs/promises";
-import { connectorFor, importStructured } from "@tako/connectors";
+import { connectorFor } from "@tako/connectors";
 import {
   closePool,
-  finishIngestionRun,
   getSourceBySlug,
+  listDueSources,
   listIngestionRuns,
   listSources,
-  recordIngestionError,
-  startIngestionRun,
-  touchSourceRun,
 } from "@tako/db";
-import { importCollected, retryFailedRun, type RunSummary } from "@tako/ingest";
+import { importSource, retryFailedRun, sourceCanCollect, type RunSummary } from "@tako/ingest";
 
 interface Args {
   command: string;
@@ -27,6 +26,8 @@ interface Args {
   file?: string;
   run?: string;
   limit?: number;
+  interval?: number;
+  once?: boolean;
 }
 
 function parseArgs(argv: string[]): Args {
@@ -47,6 +48,11 @@ function parseArgs(argv: string[]): Args {
     } else if (token === "--limit" && next !== undefined) {
       args.limit = Number(next);
       index += 1;
+    } else if (token === "--interval" && next !== undefined) {
+      args.interval = Number(next);
+      index += 1;
+    } else if (token === "--once") {
+      args.once = true;
     }
   }
   return args;
@@ -55,8 +61,9 @@ function parseArgs(argv: string[]): Args {
 async function showSources(): Promise<void> {
   for (const source of await listSources()) {
     const connector = connectorFor(source.slug);
+    const origem = source.feedUrl !== null ? "feed por URL" : connector === null ? "sem conector" : `conector v${connector.version}`;
     console.log(
-      `${source.slug}\t${source.name}\t${source.enabled ? "ativa" : "pausada"}\t${source.status}\t${connector === null ? "sem conector" : `conector v${connector.version}`}`,
+      `${source.slug}\t${source.name}\t${source.enabled ? "ativa" : "pausada"}\t${source.status}\t${origem}\tcadência ${String(source.cadenceHours ?? "—")} h`,
     );
   }
 }
@@ -71,35 +78,43 @@ function printSummary(summary: RunSummary): void {
   console.log(`  executado como ${summary.runId}`);
 }
 
-async function importSource(slug: string, file: string | undefined): Promise<void> {
+async function importOne(slug: string, file: string | undefined): Promise<void> {
   const source = await getSourceBySlug(slug);
   if (source === null) throw new Error(`fonte "${slug}" não existe no banco`);
   if (!source.enabled) throw new Error(`fonte "${slug}" está pausada`);
-
-  const connector = connectorFor(source.slug);
-  if (connector === null) throw new Error(`nenhum conector registrado para "${slug}"`);
-
-  let collected;
-  try {
-    if (file !== undefined) {
-      collected = importStructured(await readFile(file, "utf8"));
-    } else if ("collect" in connector && typeof connector.collect === "function") {
-      collected = await connector.collect({ file: undefined, now: new Date() });
-    } else {
-      throw new Error(`conector "${slug}" não sabe coletar sem arquivo`);
-    }
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    const runId = await startIngestionRun(source.id, "worker");
-    await finishIngestionRun(runId, { status: "failed", received: 0, accepted: 0, rejected: 0, message });
-    await recordIngestionError(runId, { line: null, code: "coleta", message });
-    await touchSourceRun(source.id, true);
-    throw error;
-  }
-
-  const summary = await importCollected(source, collected, "worker");
+  const summary = await importSource(source, "worker", file === undefined ? {} : { file });
   console.log(`Fonte ${source.name} (${source.slug})`);
   printSummary(summary);
+}
+
+/** Uma passada: cada fonte devida é coletada uma vez, em série; falha de uma não impede as outras. */
+async function runDue(): Promise<number> {
+  const due = (await listDueSources()).filter(sourceCanCollect);
+  if (due.length === 0) {
+    console.log("Nenhuma fonte com coleta devida agora.");
+    return 0;
+  }
+  let failures = 0;
+  for (const source of due) {
+    try {
+      const summary = await importSource(source, "agendador");
+      console.log(`${source.slug}: ${String(summary.accepted)} oferta(s) gravada(s), ${String(summary.rejected)} recusada(s)`);
+    } catch (error) {
+      failures += 1;
+      console.error(`${source.slug}: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+  return failures;
+}
+
+async function runDaemon(intervalSeconds: number, once: boolean): Promise<void> {
+  console.log(`Agendador: uma passada a cada ${String(intervalSeconds)} s${once ? " (uma vez)" : ""}.`);
+  for (;;) {
+    const failures = await runDue();
+    if (failures > 0) console.error(`${String(failures)} fonte(s) falharam nesta passada.`);
+    if (once) return;
+    await new Promise((resolve) => setTimeout(resolve, intervalSeconds * 1000));
+  }
 }
 
 async function retryRun(runId: string): Promise<void> {
@@ -112,7 +127,7 @@ async function retryRun(runId: string): Promise<void> {
 async function showRuns(limit: number): Promise<void> {
   for (const run of await listIngestionRuns(limit)) {
     console.log(
-      `${run.id}\t${run.sourceSlug}\t${run.status}\t${String(run.accepted)}/${String(run.received)}\terros abertos: ${String(run.errors)}\t${run.startedAt}`,
+      `${run.id}\t${run.sourceSlug}\t${run.status}\t${String(run.accepted)}/${String(run.received)}\terros abertos: ${String(run.openErrors)}\t${run.startedAt}`,
     );
   }
 }
@@ -128,15 +143,23 @@ async function main(): Promise<void> {
       return;
     case "import":
       if (args.source === undefined) throw new Error("use --source <slug>");
-      await importSource(args.source, args.file);
+      await importOne(args.source, args.file);
       return;
     case "retry":
       if (args.run === undefined) throw new Error("informe a execução com --run <id>");
       await retryRun(args.run);
       return;
+    case "due": {
+      const failures = await runDue();
+      if (failures > 0) process.exitCode = 1;
+      return;
+    }
+    case "daemon":
+      await runDaemon(args.interval ?? 60, args.once ?? false);
+      return;
     default:
       console.log(
-        "Uso:\n  npm run worker -- sources\n  npm run worker -- runs [--limit 10]\n  npm run worker -- import --source <slug> [--file <arquivo>]\n  npm run worker -- retry --run <id>",
+        "Uso:\n  npm run worker -- sources\n  npm run worker -- runs [--limit 10]\n  npm run worker -- import --source <slug> [--file <arquivo>]\n  npm run worker -- retry --run <id>\n  npm run worker -- due\n  npm run worker -- daemon [--interval 60] [--once]",
       );
   }
 }

@@ -1,4 +1,5 @@
 import { listStores } from "@tako/db";
+import { affiliateMode, templateDomain } from "@tako/domain";
 import { salvarLoja } from "../../actions";
 import styles from "../../admin.module.css";
 
@@ -12,8 +13,8 @@ const PARCERIAS = [
 ] as const;
 
 /** Lojas e parcerias: cadastro antes da integração existir (PAR-001, PAR-002, PRD §12.5). */
-export default async function LojasPage({ searchParams }: { searchParams: Promise<{ ok?: string }> }) {
-  const { ok } = await searchParams;
+export default async function LojasPage({ searchParams }: { searchParams: Promise<{ ok?: string; erro?: string }> }) {
+  const { ok, erro } = await searchParams;
   const stores = await listStores();
 
   return (
@@ -25,6 +26,17 @@ export default async function LojasPage({ searchParams }: { searchParams: Promis
         </div>
       </div>
       {ok !== undefined && <div className={styles["ok"]}>Loja salva.</div>}
+      {erro === "afiliado" && (
+        <div className={styles["error"]}>
+          O parâmetro de afiliado só aceita letras, números, ponto, hífen e sublinhado.
+        </div>
+      )}
+      {erro === "molde" && (
+        <div className={styles["error"]}>
+          O molde do link precisa conter {"{url}"} e apontar para um domínio permitido desta loja — acrescente o
+          domínio da rede de afiliados à lista antes de salvar.
+        </div>
+      )}
 
       {stores.map((store) => (
         <section key={store.id} className={styles["card"]}>
@@ -67,7 +79,44 @@ export default async function LojasPage({ searchParams }: { searchParams: Promis
                 <span>Atribuição exigida</span>
                 <input name="atribuicao" defaultValue={store.attribution ?? ""} placeholder="texto que acompanha o preço" />
               </label>
+              <label className={styles["field"]}>
+                <span>Parâmetro de afiliado</span>
+                <input name="afiliadoParam" defaultValue={store.affiliateParam ?? ""} placeholder="tag" />
+              </label>
+              <label className={styles["field"]}>
+                <span>Valor do afiliado (sua chave)</span>
+                <input name="afiliadoValor" defaultValue={store.affiliateValue ?? ""} placeholder="tako-20" />
+              </label>
+              <label className={styles["field"]}>
+                <span>Molde do link (opcional, com {"{url}"})</span>
+                <input
+                  name="afiliadoMolde"
+                  defaultValue={store.affiliateTemplate ?? ""}
+                  placeholder="https://loja.example/afiliado?url={url}"
+                />
+              </label>
             </div>
+            <p className={styles["muted"]}>
+              Link em uso:{" "}
+              {affiliateMode({
+                linkKind: store.linkKind,
+                affiliateParam: store.affiliateParam,
+                affiliateValue: store.affiliateValue,
+                affiliateTemplate: store.affiliateTemplate,
+                allowedDomains: store.allowedDomains,
+              }) === "template"
+                ? `molde (domínio ${templateDomain(store.affiliateTemplate) ?? "—"})`
+                : affiliateMode({
+                      linkKind: store.linkKind,
+                      affiliateParam: store.affiliateParam,
+                      affiliateValue: store.affiliateValue,
+                      affiliateTemplate: store.affiliateTemplate,
+                      allowedDomains: store.allowedDomains,
+                    }) === "param"
+                  ? `parâmetro ${store.affiliateParam}`
+                  : "endereço da oferta, sem marcação"}{" "}
+              · domínios permitidos: {store.allowedDomains.join(", ") || "nenhum"}
+            </p>
             <label className={styles["field"]} style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
               <input type="checkbox" name="ativa" defaultChecked={store.enabled} />
               <span>Loja ativa na loja pública</span>
