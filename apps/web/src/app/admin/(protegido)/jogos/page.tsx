@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { listAllGames } from "@tako/db";
-import { criarJogo, publicarJogo } from "../../actions";
+import { criarJogo, exportarCatalogo, preverImportacaoCatalogo, publicarJogo } from "../../actions";
 import styles from "../../admin.module.css";
 
 export const dynamic = "force-dynamic";
@@ -9,9 +9,9 @@ export const dynamic = "force-dynamic";
 export default async function JogosPage({
   searchParams,
 }: {
-  searchParams: Promise<{ ok?: string; filtro?: string; erro?: string; slug?: string }>;
+  searchParams: Promise<{ ok?: string; filtro?: string; erro?: string; slug?: string; jogos?: string }>;
 }) {
-  const { ok, filtro, erro, slug } = await searchParams;
+  const { ok, filtro, erro, slug, jogos } = await searchParams;
   const games = await listAllGames();
   const filtered = games.filter((game) => {
     if (filtro === "publicados") return game.published;
@@ -40,13 +40,49 @@ export default async function JogosPage({
           </Link>
         </div>
       </div>
-      {ok !== undefined && <div className={styles["ok"]}>Alteração registrada.</div>}
+      {ok === "importado" && (
+        <div className={styles["ok"]}>Importados {jogos ?? "0"} jogo(s). Imagens e ofertas não mudaram.</div>
+      )}
+      {ok !== undefined && ok !== "importado" && <div className={styles["ok"]}>Alteração registrada.</div>}
+      {erro === "arquivo" && <div className={styles["error"]}>Escolha um arquivo de catálogo.</div>}
+      {erro === "arquivo-grande" && <div className={styles["error"]}>O arquivo passa de 5 MB. Divida o catálogo.</div>}
+      {erro === "arquivo-invalido" && (
+        <div className={styles["error"]}>O arquivo tem erro e não foi aplicado. Veja a prévia para o detalhe.</div>
+      )}
       {erro === "slug" && (
         <div className={styles["error"]}>
           Já existe um jogo com o endereço <code>{slug ?? ""}</code>. Troque o slug ou edite o jogo existente.
         </div>
       )}
       {erro === "jogo" && <div className={styles["error"]}>Informe o título do jogo.</div>}
+
+      <section className={styles["card"]}>
+        <h2>Catálogo em arquivo</h2>
+        <p className={styles["muted"]}>
+          Exporta tudo em JSON para editar em massa, e importa de volta com prévia: nada grava antes de você conferir
+          o que entra, o que muda e o que está errado.
+        </p>
+        <form action={exportarCatalogo} className={styles["form"]}>
+          <div className={styles["actions"]}>
+            <button type="submit" className={styles["secondary"]}>
+              Exportar catálogo
+            </button>
+          </div>
+        </form>
+        <form action={preverImportacaoCatalogo} className={styles["form"]}>
+          <div className={styles["grid2"]}>
+            <label className={styles["field"]}>
+              <span>Arquivo para importar</span>
+              <input type="file" name="arquivo" accept="application/json,.json" required />
+            </label>
+          </div>
+          <div className={styles["actions"]}>
+            <button type="submit" className={styles["secondary"]}>
+              Ver prévia
+            </button>
+          </div>
+        </form>
+      </section>
 
       <section className={styles["card"]}>
         <h2>Novo jogo</h2>
