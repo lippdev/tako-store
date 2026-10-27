@@ -48,11 +48,11 @@ export function Inicio() {
       <main className={styles["conteudo"]}>
         <section className={styles["abertura"]}>
           <p className="overline">Tako Store</p>
-          <h1 className="page-title">A loja do Tako, com o design system do launcher.</h1>
+          <h1 className="page-title">Descobrir jogos e comparar preços, no ecossistema Tako.</h1>
           <p className={cx("body", styles["linha"])}>
-            Este é o começo do repositório: a base visual do app Tako Launcher trazida inteira para cá, o método de
-            trabalho do lippstack e o Git Flow da Atlassian. A partir daqui, cada tela nasce com as mesmas peças que o
-            launcher usa.
+            A loja reúne ofertas válidas para o Brasil e mostra o menor preço elegível, sem favorecer loja parceira. A
+            compra acontece no site da loja escolhida. Este é o começo do repositório: a fundação com o design system
+            do launcher, o método do lippstack e o Git Flow.
           </p>
         </section>
 
