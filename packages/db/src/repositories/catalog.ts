@@ -213,17 +213,3 @@ export async function listExternalIdentifiers(gameId: string): Promise<{ sourceI
     [gameId],
   );
 }
-
-/** Imagem com a origem registrada (CAT-005). */
-export async function addMediaAsset(input: {
-  gameId: string;
-  kind: "cover" | "hero" | "logo" | "screenshot";
-  url: string;
-  origin: string;
-  attribution?: string | null;
-}): Promise<void> {
-  await query(
-    `insert into media_assets (game_id, kind, url, origin, attribution) values ($1, $2, $3, $4, $5)`,
-    [input.gameId, input.kind, input.url, input.origin, input.attribution ?? null],
-  );
-}

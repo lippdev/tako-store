@@ -3,6 +3,7 @@
 // recria o banco; use só em desenvolvimento.
 
 import {
+  addMediaAsset,
   closePool,
   createAdminUser,
   migrate,
@@ -68,6 +69,12 @@ async function main(): Promise<void> {
     kind: "file",
     maxAgeHours: 24,
     notes: "Exportação estruturada fictícia, usada nos testes de importação.",
+    access: "api",
+    format: "csv",
+    coversBrl: true,
+    cadenceHours: 24,
+    status: "approved",
+    attribution: "Dados fictícios gerados pelo próprio projeto.",
   });
   const demoFeed = await upsertSource({
     slug: "feed-demo",
@@ -75,6 +82,12 @@ async function main(): Promise<void> {
     kind: "feed",
     maxAgeHours: 6,
     notes: "Feed fictício com atualização mais frequente.",
+    access: "partner-feed",
+    format: "json",
+    coversBrl: true,
+    cadenceHours: 6,
+    status: "approved",
+    attribution: "Dados fictícios gerados pelo próprio projeto.",
   });
   await upsertSource({
     slug: "fonte-pausada",
@@ -83,6 +96,43 @@ async function main(): Promise<void> {
     enabled: false,
     maxAgeHours: 48,
     notes: "Fonte desligada de propósito: as ofertas dela não aparecem na loja.",
+    access: "api",
+    format: "json",
+    coversBrl: true,
+    cadenceHours: 48,
+    status: "approved",
+  });
+
+  // Matriz de fontes (PAR-004): candidatas em avaliação. São registros fictícios, nomeados como exemplo — não
+  // representam acesso real a nenhum parceiro.
+  await upsertSource({
+    slug: "candidata-pagina-exemplo",
+    name: "Página pública (exemplo fictício)",
+    kind: "page",
+    enabled: false,
+    maxAgeHours: 24,
+    notes: "Exemplo de candidata: só preço à vista na página, sem API. Avaliar termos antes de qualquer coleta.",
+    access: "public-page",
+    format: "html",
+    coversBrl: false,
+    cadenceHours: 24,
+    status: "evaluating",
+  });
+  await upsertSource({
+    slug: "candidata-feed-exemplo",
+    name: "Feed de parceiro (exemplo fictício)",
+    kind: "feed",
+    enabled: false,
+    maxAgeHours: 12,
+    notes: "Exemplo de candidata com feed documentado e cobertura em BRL; falta contrato assinado.",
+    access: "partner-feed",
+    format: "xml",
+    coversBrl: true,
+    cadenceHours: 12,
+    docsUrl: "https://exemplo.invalid/feed/documentacao",
+    termsUrl: "https://exemplo.invalid/termos",
+    attribution: "Preços cedidos pelo parceiro de exemplo.",
+    status: "candidate",
   });
 
   const games = [
@@ -239,6 +289,24 @@ async function main(): Promise<void> {
       published: true,
     });
     saved.set(game.slug, row.id);
+
+    // Biblioteca de imagens (CAT-005): cada imagem com a procedência registrada.
+    await addMediaAsset({
+      gameId: row.id,
+      kind: "cover",
+      url: `/covers/${game.slug}.svg`,
+      origin: "Arte de demonstração gerada pelo projeto",
+      attribution: "Tako Store — catálogo de demonstração",
+    });
+    for (const frame of [1, 2]) {
+      await addMediaAsset({
+        gameId: row.id,
+        kind: "screenshot",
+        url: `/covers/galeria/${game.slug}-${String(frame)}.svg`,
+        origin: "Arte de demonstração gerada pelo projeto",
+        attribution: "Tako Store — catálogo de demonstração",
+      });
+    }
   }
 
   // Produtos: base para todos; edição, DLC e bundle em alguns, para exercitar as regras de comparação.

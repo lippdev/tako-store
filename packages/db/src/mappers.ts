@@ -113,6 +113,14 @@ export interface SourceRow {
   regions: string[];
   currencies: string[];
   notes: string | null;
+  access: Source["access"];
+  format: Source["format"];
+  covers_brl: boolean;
+  cadence_hours: number | null;
+  docs_url: string | null;
+  terms_url: string | null;
+  attribution: string | null;
+  status: Source["status"];
 }
 
 export function toSource(row: SourceRow): Source {
@@ -126,6 +134,14 @@ export function toSource(row: SourceRow): Source {
     regions: row.regions,
     currencies: row.currencies,
     notes: row.notes,
+    access: row.access,
+    format: row.format,
+    coversBrl: row.covers_brl,
+    cadenceHours: row.cadence_hours,
+    docsUrl: row.docs_url,
+    termsUrl: row.terms_url,
+    attribution: row.attribution,
+    status: row.status,
   };
 }
 

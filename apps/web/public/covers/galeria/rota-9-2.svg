@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720" role="img" aria-label="Rota 9 — imagem de demonstração 2">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#3d0f0f"/>
+      <stop offset="1" stop-color="#8a2b06"/>
+    </linearGradient>
+  </defs>
+  <rect width="1280" height="720" fill="url(#bg)"/>
+  <g fill="none" stroke="#ffb703" stroke-opacity="0.35" stroke-width="3">
+    <path d="M-60 490 C 260 380, 520 600, 820 440 S 1200 380, 1340 480"/>
+    <circle cx="800" cy="280" r="156" fill="#ffb703" fill-opacity="0.12"/>
+  </g>
+  <text x="64" y="632" fill="#ffb703" font-family="Poppins, system-ui, sans-serif" font-size="44" font-weight="700">Rota 9</text>
+  <text x="64" y="674" fill="#ffb703" fill-opacity="0.7" font-family="system-ui, sans-serif" font-size="18" letter-spacing="4">IMAGEM DE DEMONSTRAÇÃO 2</text>
+</svg>

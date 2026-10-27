@@ -6,7 +6,8 @@ import { query, queryOne } from "../pool";
 import { toOffer, toSource, toStore, type OfferRow, type SourceRow, type StoreRow } from "../mappers";
 
 const STORE_COLUMNS = `id, slug, name, partner_status, enabled, allowed_domains, link_kind, attribution, regions, currencies`;
-const SOURCE_COLUMNS = `id, slug, name, kind, enabled, max_age_hours, regions, currencies, notes`;
+const SOURCE_COLUMNS = `id, slug, name, kind, enabled, max_age_hours, regions, currencies, notes, access, format,
+  covers_brl, cadence_hours, docs_url, terms_url, attribution, status`;
 const OFFER_COLUMNS = `id, product_id, store_id, source_id, price_cents, reference_price_cents, currency, region,
   platform, availability, coupon, subscription, url, observed_at`;
 
@@ -87,12 +88,21 @@ export interface SourceInput {
   regions?: string[];
   currencies?: string[];
   notes?: string | null;
+  access?: Source["access"];
+  format?: Source["format"];
+  coversBrl?: boolean;
+  cadenceHours?: number | null;
+  docsUrl?: string | null;
+  termsUrl?: string | null;
+  attribution?: string | null;
+  status?: Source["status"];
 }
 
 export async function upsertSource(input: SourceInput): Promise<Source> {
   const row = await queryOne<SourceRow>(
-    `insert into sources (slug, name, kind, enabled, max_age_hours, regions, currencies, notes)
-     values ($1, $2, $3, $4, $5, $6, $7, $8)
+    `insert into sources (slug, name, kind, enabled, max_age_hours, regions, currencies, notes, access, format,
+       covers_brl, cadence_hours, docs_url, terms_url, attribution, status)
+     values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
      on conflict (slug) do update set
        name = excluded.name,
        kind = excluded.kind,
@@ -101,6 +111,14 @@ export async function upsertSource(input: SourceInput): Promise<Source> {
        regions = excluded.regions,
        currencies = excluded.currencies,
        notes = excluded.notes,
+       access = excluded.access,
+       format = excluded.format,
+       covers_brl = excluded.covers_brl,
+       cadence_hours = excluded.cadence_hours,
+       docs_url = excluded.docs_url,
+       terms_url = excluded.terms_url,
+       attribution = excluded.attribution,
+       status = excluded.status,
        updated_at = now()
      returning ${SOURCE_COLUMNS}`,
     [
@@ -112,6 +130,14 @@ export async function upsertSource(input: SourceInput): Promise<Source> {
       input.regions ?? ["BR"],
       input.currencies ?? ["BRL"],
       input.notes ?? null,
+      input.access ?? "unknown",
+      input.format ?? "unknown",
+      input.coversBrl ?? false,
+      input.cadenceHours ?? null,
+      input.docsUrl ?? null,
+      input.termsUrl ?? null,
+      input.attribution ?? null,
+      input.status ?? "candidate",
     ],
   );
   if (row === null) throw new Error("upsert de fonte não devolveu linha");
@@ -284,12 +310,57 @@ export async function listIngestionRuns(limit = 30): Promise<IngestionRun[]> {
   );
 }
 
+export interface IngestionError {
+  id: string;
+  line: number | null;
+  code: string;
+  message: string;
+  payload: unknown;
+  resolvedAt: string | null;
+  resolvedRunId: string | null;
+}
+
 export async function listIngestionErrors(
   runId: string,
 ): Promise<{ line: number | null; code: string; message: string }[]> {
   return query<{ line: number | null; code: string; message: string }>(
     "select line, code, message from ingestion_errors where run_id = $1 order by line nulls last, id",
     [runId],
+  );
+}
+
+/** Erros de uma execução com o conteúdo original, para o reprocessamento (OFR-006). */
+export async function listIngestionErrorsDetailed(runId: string): Promise<IngestionError[]> {
+  return query<IngestionError>(
+    `select id::text as id, line, code, message, payload,
+            resolved_at as "resolvedAt", resolved_run_id as "resolvedRunId"
+     from ingestion_errors where run_id = $1 order by line nulls last, id`,
+    [runId],
+  );
+}
+
+/** Marca os erros que a nova execução conseguiu reprocessar. */
+export async function resolveIngestionErrors(ids: readonly string[], resolvedRunId: string): Promise<void> {
+  if (ids.length === 0) return;
+  await query(
+    "update ingestion_errors set resolved_at = now(), resolved_run_id = $2 where id = any($1::bigint[]) and resolved_at is null",
+    [ids, resolvedRunId],
+  );
+}
+
+/** Execuções com erro ainda aberto: a fila que o operador reprocessa. */
+export async function runsWithOpenErrors(limit = 10): Promise<{ runId: string; sourceSlug: string; sourceName: string; startedAt: string; openErrors: number }[]> {
+  return query(
+    `select r.id as "runId", s.slug as "sourceSlug", s.name as "sourceName", r.started_at as "startedAt",
+            count(e.id)::int as "openErrors"
+     from ingestion_errors e
+     join ingestion_runs r on r.id = e.run_id
+     join sources s on s.id = r.source_id
+     where e.resolved_at is null
+     group by r.id, s.slug, s.name, r.started_at
+     order by r.started_at desc
+     limit $1`,
+    [limit],
   );
 }
 
