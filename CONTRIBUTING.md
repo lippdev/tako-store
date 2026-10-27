@@ -30,6 +30,11 @@ feature/y        ●───●───●─────┘
 **Feature.** `git switch develop && git pull`, `git switch -c feature/nome-curto`, commits pequenos, PR com base
 em `develop`. A feature só entra na `develop` por pull request revisado.
 
+**O merge preserva o histórico.** Feature entra na `develop` por **merge commit** (`gh pr merge --merge`), nunca por
+squash: cada commit da branch continua sendo um commit na `develop`, com o seu título e o seu diff. O squash achatа
+o trabalho em um commit só e apaga a trilha do que foi feito, que é justamente o que protege o projeto numa
+regressão. Release e hotfix já entram por merge commit.
+
 **Release.** Quando a `develop` junta o que fecha uma versão: `git switch -c release/1.2.0`, sobe a versão e o
 changelog, PR para `main`. Depois do merge, tag `v1.2.0` na `main` e o back-merge `main` → `develop`, para a
 `develop` não perder o que a release corrigiu.
