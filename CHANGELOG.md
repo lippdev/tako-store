@@ -3,6 +3,28 @@
 Formato: [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/). Versões seguem
 [SemVer](https://semver.org/lang/pt-BR/).
 
+## [0.3.0] — 2026-10-27
+
+Deixa a operação ligável sem código: chave de afiliado no painel, fonte real por URL, coleta automática e o que
+faltava de criação no catálogo.
+
+### Adicionado
+
+- **Link de afiliado (PAR-002)**: parâmetro + valor ou molde com `{url}` por loja, aplicado no servidor em
+  `/ir/<oferta>` e validado contra os domínios permitidos; contagem de cliques por oferta em `/admin/ofertas`.
+- **Feed real (OFR-004/OFR-008)**: cadastro de fonte por URL (JSON/CSV) com de-para de campos validado, execução pelo
+  painel com relatório e conector genérico sem dependência externa.
+- **Coleta contínua**: `worker due` e `worker daemon` respeitando a cadência de cada fonte; unidades systemd em
+  `deploy/systemd/` e `deploy/env.example`.
+- **Catálogo**: criar jogo pelo painel (slug automático, nasce oculto) e gerenciar banners da home.
+- **Loja**: carrossel de até três destaques na home, com navegação por pontos.
+- **Backup**: `--keep N` para retenção de dumps.
+- **Documentação**: `docs/integracoes.md` com o passo a passo para ligar loja, chave, feed e agendador.
+
+### Notas
+
+- Falta apenas o acesso autorizado dos parceiros para existir oferta real; o mecanismo está pronto e testado.
+
 ## [0.2.0] — 2026-10-27
 
 Fecha as pendências das fases 1 a 4 e completa a administração. Nada disso muda a regra de preço: o motor do
