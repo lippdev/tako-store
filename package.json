@@ -1,0 +1,28 @@
+{
+  "name": "tako-store",
+  "private": true,
+  "version": "0.0.0",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "dev": "npm run dev -w @tako/web",
+    "build": "npm run build -w @tako/web",
+    "start": "npm run start -w @tako/web",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "lint": "npm run lint -w @tako/web",
+    "test": "npm run test --workspaces --if-present",
+    "check": "node scripts/check.mjs",
+    "sync:design": "npm run sync:design -w @tako/web",
+    "db:up": "docker compose up -d --wait postgres",
+    "db:down": "docker compose down",
+    "db:migrate": "npm run migrate -w @tako/db",
+    "db:seed": "npm run seed -w @tako/db",
+    "db:reset": "npm run reset -w @tako/db",
+    "worker": "node --import tsx apps/worker/src/index.ts"
+  }
+}
