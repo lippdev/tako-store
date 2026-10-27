@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 800" role="img" aria-label="Fúria de Aço">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#1b1b1b"/>
+      <stop offset="1" stop-color="#5c2018"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.75" cy="0.2" r="0.6">
+      <stop offset="0" stop-color="#e0a458" stop-opacity="0.5"/>
+      <stop offset="1" stop-color="#e0a458" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="600" height="800" fill="url(#g)"/>
+  <circle cx="450" cy="160" r="320" fill="url(#glow)"/>
+  <g fill="none" stroke="#e0a458" stroke-opacity="0.28" stroke-width="2">
+    <path d="M-40 620 C 140 520, 260 700, 420 580 S 640 470, 700 540"/>
+    <path d="M-40 690 C 150 600, 300 760, 470 650 S 660 560, 720 620"/>
+  </g>
+  <text x="48" y="700" fill="#e0a458" font-family="Poppins, system-ui, sans-serif" font-size="52" font-weight="800" letter-spacing="-1">Fúria de Aço</text>
+  <text x="48" y="740" fill="#e0a458" fill-opacity="0.7" font-family="system-ui, sans-serif" font-size="20" letter-spacing="4">DEMONSTRAÇÃO</text>
+</svg>
