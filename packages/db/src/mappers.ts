@@ -93,6 +93,9 @@ export interface StoreRow {
   attribution: string | null;
   regions: string[];
   currencies: string[];
+  affiliate_param: string | null;
+  affiliate_value: string | null;
+  affiliate_template: string | null;
 }
 
 export function toStore(row: StoreRow): Store {
@@ -107,6 +110,9 @@ export function toStore(row: StoreRow): Store {
     attribution: row.attribution,
     regions: row.regions,
     currencies: row.currencies,
+    affiliateParam: row.affiliate_param,
+    affiliateValue: row.affiliate_value,
+    affiliateTemplate: row.affiliate_template,
   };
 }
 
@@ -130,6 +136,8 @@ export interface SourceRow {
   status: Source["status"];
   last_run_at: Date | null;
   consecutive_failures: number;
+  feed_url: string | null;
+  field_map: Record<string, string>;
 }
 
 export function toSource(row: SourceRow): Source {
@@ -153,6 +161,8 @@ export function toSource(row: SourceRow): Source {
     status: row.status,
     lastRunAt: toIso(row.last_run_at),
     consecutiveFailures: row.consecutive_failures,
+    feedUrl: row.feed_url,
+    fieldMap: row.field_map,
   };
 }
 

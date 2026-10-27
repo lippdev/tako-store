@@ -65,6 +65,10 @@ export interface Source {
   /** Última execução registrada e falhas consecutivas: o alerta de integração (OPS-001). */
   lastRunAt: string | null;
   consecutiveFailures: number;
+  /** URL de onde a fonte entrega o arquivo, quando o acesso é por feed (OFR-008). */
+  feedUrl: string | null;
+  /** De-para dos nomes de campo da fonte para os nomes canônicos do importador. */
+  fieldMap: Record<string, string>;
 }
 
 export const SOURCE_ACCESSES = ["api", "partner-feed", "public-page", "unknown"] as const;

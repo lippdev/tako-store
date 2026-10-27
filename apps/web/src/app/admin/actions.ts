@@ -7,10 +7,12 @@ import {
   revokeUserSessions,
   setAdminUserActive,
   setAdminUserRole,
+  deleteBanner,
   deleteSection,
   decideMapping,
-  finishIngestionRun,
+  findGameBySlug,
   getGameById,
+  getSourceBySlug,
   listMediaAssets,
   mergeGames,
   removeExternalIdentifier,
@@ -18,19 +20,23 @@ import {
   replacePrimaryImage,
   setExternalIdentifier,
   setGameVisibility,
+  setBannerPublished,
   setPrimaryMedia,
   setProductPublished,
   setSectionPublished,
   setSourceEnabled,
-  startIngestionRun,
   updateGame,
   updateSourceMatrix,
+  upsertBanner,
+  upsertGame,
   upsertProduct,
   upsertSection,
+  upsertSource,
   upsertStore,
   writeAudit,
 } from "@tako/db";
-import { retryFailedRun } from "@tako/ingest";
+import { importSource, retryFailedRun } from "@tako/ingest";
+import { validateFieldMap } from "@tako/connectors";
 import {
   disableMfa,
   enableMfa,
@@ -40,7 +46,16 @@ import {
   verifyTotp,
   verifyUserTotp,
 } from "@tako/db";
-import { isMediaKind, normalizeDomain, parseMediaUrl, type HomeRule, type MediaKind } from "@tako/domain";
+import {
+  isAffiliateParam,
+  isMediaKind,
+  normalizeDomain,
+  parseMediaUrl,
+  slugify,
+  templateDomain,
+  type HomeRule,
+  type MediaKind,
+} from "@tako/domain";
 import { completeMfaSignIn, requirePermission, requireUser, signIn, signOut } from "@/server/session";
 
 function text(form: FormData, name: string): string {
@@ -162,6 +177,14 @@ export async function salvarLoja(form: FormData): Promise<void> {
   const user = await requirePermission("stores:write");
   const domains = list(form, "dominios").map(normalizeDomain).filter((domain) => domain !== "");
   const partner = text(form, "parceria");
+  const affiliateParam = optional(form, "afiliadoParam");
+  const affiliateTemplate = optional(form, "afiliadoMolde");
+  if (affiliateParam !== null && !isAffiliateParam(affiliateParam)) redirect("/admin/lojas?erro=afiliado");
+  if (affiliateTemplate !== null) {
+    const host = templateDomain(affiliateTemplate);
+    const allowed = domains.some((domain) => host === domain || (host !== null && host.endsWith(`.${domain}`)));
+    if (host === null || !allowed) redirect("/admin/lojas?erro=molde");
+  }
   const store = await upsertStore({
     slug: text(form, "slug"),
     name: text(form, "nome"),
@@ -171,6 +194,9 @@ export async function salvarLoja(form: FormData): Promise<void> {
     allowedDomains: domains,
     linkKind: text(form, "link") === "affiliate" ? "affiliate" : text(form, "link") === "source" ? "source" : "direct",
     attribution: optional(form, "atribuicao"),
+    affiliateParam,
+    affiliateValue: optional(form, "afiliadoValor"),
+    affiliateTemplate,
   });
   await writeAudit({ actor: user, action: "loja:salvar", entity: "store", entityId: store.id, detail: { slug: store.slug } });
   redirect("/admin/lojas?ok=1");
@@ -185,20 +211,34 @@ export async function alternarFonte(form: FormData): Promise<void> {
   redirect("/admin/fontes?ok=1");
 }
 
-/** Execução manual do conector de demonstração: registra a execução e o resultado (OFR-006). */
+/** Coleta e importa agora, pelo painel, com o mesmo código do worker (OFR-004, OFR-006). */
 export async function executarImportacao(form: FormData): Promise<void> {
   const user = await requirePermission("sources:write");
-  const sourceId = text(form, "id");
-  const runId = await startIngestionRun(sourceId, user.email);
-  await finishIngestionRun(runId, {
-    status: "success",
-    received: 0,
-    accepted: 0,
-    rejected: 0,
-    message: "Execução manual registrada; o conector de demonstração roda pelo worker (npm run worker).",
-  });
-  await writeAudit({ actor: user, action: "fonte:executar", entity: "source", entityId: sourceId, detail: { runId } });
-  redirect("/admin/fontes?ok=1");
+  const slug = text(form, "slug");
+  const source = await getSourceBySlug(slug);
+  if (source === null) redirect("/admin/fontes?erro=fonte-inexistente");
+  if (!source.enabled) redirect("/admin/fontes?erro=pausada");
+
+  let summary: { accepted: number; rejected: number; runId: string } | null = null;
+  let failure: string | null = null;
+  try {
+    const result = await importSource(source, `painel:${user.email}`);
+    summary = { accepted: result.accepted, rejected: result.rejected, runId: result.runId };
+    await writeAudit({
+      actor: user,
+      action: "fonte:executar",
+      entity: "source",
+      entityId: source.id,
+      detail: { executado: result.runId, aceitas: result.accepted, recusadas: result.rejected },
+    });
+  } catch (error) {
+    failure = error instanceof Error ? error.message : "erro desconhecido";
+    await writeAudit({ actor: user, action: "fonte:executar-falhou", entity: "source", entityId: source.id, detail: { motivo: failure } });
+  }
+  if (failure !== null) redirect(`/admin/fontes?erro=${encodeURIComponent(failure)}`);
+  redirect(
+    `/admin/fontes?ok=executado&aceitas=${String(summary?.accepted ?? 0)}&recusadas=${String(summary?.rejected ?? 0)}`,
+  );
 }
 
 function regra(form: FormData): HomeRule {
@@ -529,4 +569,107 @@ export async function desativarMfaAction(form: FormData): Promise<void> {
   await disableMfa(user.id);
   await writeAudit({ actor: user, action: "usuario:mfa-desativar", entity: "admin_user", entityId: user.id });
   redirect("/admin/seguranca?ok=desligado");
+}
+
+/** Cria jogo pelo painel (CAT-004): slug vem do título e não pode repetir. */
+export async function criarJogo(form: FormData): Promise<void> {
+  const user = await requirePermission("games:write");
+  const title = text(form, "titulo");
+  const slug = slugify(text(form, "slug") === "" ? title : text(form, "slug"));
+  if (title === "" || slug === "") redirect("/admin/jogos?erro=jogo");
+
+  const existing = await findGameBySlug(slug);
+  if (existing !== null) redirect(`/admin/jogos?erro=slug&slug=${encodeURIComponent(slug)}`);
+
+  const game = await upsertGame({
+    slug,
+    title,
+    originalTitle: optional(form, "tituloOriginal"),
+    releaseDate: optional(form, "lancamento"),
+    genres: list(form, "generos"),
+    published: false,
+  });
+  await writeAudit({ actor: user, action: "jogo:criar", entity: "game", entityId: game.id, detail: { slug, titulo: title } });
+  redirect(`/admin/jogos/${game.id}?ok=criado`);
+}
+
+/** Banner da home (STO-001): criar, editar, publicar e remover. */
+export async function salvarBanner(form: FormData): Promise<void> {
+  const user = await requirePermission("home:write");
+  const id = optional(form, "id");
+  const title = text(form, "titulo");
+  if (title === "") redirect("/admin/home?erro=banner");
+  const banner = await upsertBanner({
+    ...(id === null ? {} : { id }),
+    gameId: optional(form, "jogoId"),
+    eyebrow: optional(form, "sobretitulo"),
+    title,
+    subtitle: optional(form, "subtitulo"),
+    ctaLabel: optional(form, "cta"),
+    position: Number(text(form, "posicao") || "0"),
+    published: bool(form, "publicado"),
+  });
+  await writeAudit({ actor: user, action: "home:banner", entity: "home_banner", entityId: banner.id, detail: { titulo: title } });
+  redirect("/admin/home?ok=banner");
+}
+
+export async function alternarBanner(form: FormData): Promise<void> {
+  const user = await requirePermission("home:write");
+  const id = text(form, "id");
+  const published = bool(form, "publicado");
+  await setBannerPublished(id, published);
+  await writeAudit({ actor: user, action: `home:banner-${published ? "publicar" : "ocultar"}`, entity: "home_banner", entityId: id });
+  redirect("/admin/home?ok=banner");
+}
+
+export async function removerBanner(form: FormData): Promise<void> {
+  const user = await requirePermission("home:write");
+  const id = text(form, "id");
+  await deleteBanner(id);
+  await writeAudit({ actor: user, action: "home:banner-remover", entity: "home_banner", entityId: id });
+  redirect("/admin/home?ok=banner");
+}
+
+/** De-para do feed: uma linha por campo, `canonico=nome_na_fonte`. */
+function lerMapaDeCampos(value: string): { map: Record<string, string>; errors: string[] } {
+  const map: Record<string, string> = {};
+  for (const line of value.split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (trimmed === "") continue;
+    const [canonical, ...rest] = trimmed.split("=");
+    const sourceField = rest.join("=").trim();
+    if (canonical === undefined || sourceField === "") return { map, errors: [`linha inválida: "${trimmed}"`] };
+    map[canonical.trim()] = sourceField;
+  }
+  return { map, errors: validateFieldMap(map) };
+}
+
+/** Nova fonte por URL de feed, ou atualização da existente (OFR-008). */
+export async function salvarFonte(form: FormData): Promise<void> {
+  const user = await requirePermission("sources:write");
+  const slug = slugify(text(form, "slug") === "" ? text(form, "nome") : text(form, "slug"));
+  const name = text(form, "nome");
+  const feedUrl = optional(form, "feedUrl");
+  if (slug === "" || name === "") redirect("/admin/fontes?erro=fonte");
+  if (feedUrl !== null && !feedUrl.startsWith("https://")) redirect("/admin/fontes?erro=feed-https");
+
+  const { map, errors } = lerMapaDeCampos(text(form, "mapa"));
+  if (errors.length > 0) redirect(`/admin/fontes?erro=mapa&detalhe=${encodeURIComponent(errors[0] ?? "")}`);
+
+  const source = await upsertSource({
+    slug,
+    name,
+    kind: text(form, "tipo") === "page" ? "page" : "feed",
+    maxAgeHours: Number(text(form, "validade") || "24"),
+    access: feedUrl === null ? "unknown" : "partner-feed",
+    format: text(form, "formato") === "csv" ? "csv" : text(form, "formato") === "json" ? "json" : "unknown",
+    coversBrl: bool(form, "cobreBrl"),
+    cadenceHours: Number(text(form, "cadencia") || "24"),
+    feedUrl,
+    fieldMap: map,
+    status: "evaluating",
+    notes: optional(form, "observacoes"),
+  });
+  await writeAudit({ actor: user, action: "fonte:salvar", entity: "source", entityId: source.id, detail: { slug, feedUrl } });
+  redirect("/admin/fontes?ok=fonte");
 }

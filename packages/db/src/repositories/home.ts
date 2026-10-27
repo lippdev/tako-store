@@ -107,42 +107,64 @@ export async function deleteSection(slug: string): Promise<void> {
 export interface HomeBanner {
   id: string;
   gameId: string | null;
+  gameTitle: string | null;
   eyebrow: string | null;
   title: string;
   subtitle: string | null;
   ctaLabel: string | null;
+  position: number;
   published: boolean;
 }
 
 interface HomeBannerRow {
   id: string;
   game_id: string | null;
+  game_title: string | null;
   eyebrow: string | null;
   title: string;
   subtitle: string | null;
   cta_label: string | null;
+  position: number;
   published: boolean;
 }
 
 export async function listLiveBanners(now = new Date()): Promise<HomeBanner[]> {
   const rows = await query<HomeBannerRow>(
-    `select id, game_id, eyebrow, title, subtitle, cta_label, published from home_banners
-     where published and (starts_at is null or starts_at <= $1) and (ends_at is null or ends_at > $1)
-     order by position, title limit 3`,
+    `select b.id, b.game_id, g.title as game_title, b.eyebrow, b.title, b.subtitle, b.cta_label, b.position, b.published
+     from home_banners b left join games g on g.id = b.game_id
+     where b.published and (b.starts_at is null or b.starts_at <= $1) and (b.ends_at is null or b.ends_at > $1)
+     order by b.position, b.title limit 3`,
     [now],
   );
-  return rows.map((row) => ({
+  return rows.map(toBanner);
+}
+
+function toBanner(row: HomeBannerRow): HomeBanner {
+  return {
     id: row.id,
     gameId: row.game_id,
+    gameTitle: row.game_title,
     eyebrow: row.eyebrow,
     title: row.title,
     subtitle: row.subtitle,
     ctaLabel: row.cta_label,
+    position: row.position,
     published: row.published,
-  }));
+  };
+}
+
+/** Banners do painel: todos, inclusive os ocultos. */
+export async function listAllBanners(): Promise<HomeBanner[]> {
+  const rows = await query<HomeBannerRow>(
+    `select b.id, b.game_id, g.title as game_title, b.eyebrow, b.title, b.subtitle, b.cta_label, b.position, b.published
+     from home_banners b left join games g on g.id = b.game_id
+     order by b.position, b.title`,
+  );
+  return rows.map(toBanner);
 }
 
 export async function upsertBanner(input: {
+  id?: string;
   gameId: string | null;
   eyebrow?: string | null;
   title: string;
@@ -150,10 +172,35 @@ export async function upsertBanner(input: {
   ctaLabel?: string | null;
   position?: number;
   published?: boolean;
-}): Promise<void> {
-  await query(
-    `insert into home_banners (game_id, eyebrow, title, subtitle, cta_label, position, published)
-     values ($1, $2, $3, $4, $5, $6, $7)`,
-    [input.gameId, input.eyebrow ?? null, input.title, input.subtitle ?? null, input.ctaLabel ?? null, input.position ?? 0, input.published ?? true],
+}): Promise<HomeBanner> {
+  const row = await queryOne<HomeBannerRow>(
+    `insert into home_banners as b (id, game_id, eyebrow, title, subtitle, cta_label, position, published)
+     values (coalesce($1::uuid, gen_random_uuid()), $2, $3, $4, $5, $6, $7, $8)
+     on conflict (id) do update set
+       game_id = excluded.game_id, eyebrow = excluded.eyebrow, title = excluded.title, subtitle = excluded.subtitle,
+       cta_label = excluded.cta_label, position = excluded.position, published = excluded.published
+     returning id, game_id,
+       (select title from games where id = b.game_id) as game_title,
+       eyebrow, title, subtitle, cta_label, position, published`,
+    [
+      input.id ?? null,
+      input.gameId,
+      input.eyebrow ?? null,
+      input.title,
+      input.subtitle ?? null,
+      input.ctaLabel ?? null,
+      input.position ?? 0,
+      input.published ?? true,
+    ],
   );
+  if (row === null) throw new Error("banner não foi gravado");
+  return toBanner(row);
+}
+
+export async function setBannerPublished(id: string, published: boolean): Promise<void> {
+  await query("update home_banners set published = $2 where id = $1", [id, published]);
+}
+
+export async function deleteBanner(id: string): Promise<void> {
+  await query("delete from home_banners where id = $1", [id]);
 }

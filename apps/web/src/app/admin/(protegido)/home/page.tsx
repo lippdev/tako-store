@@ -1,5 +1,5 @@
-import { listAllGames, listAllSections, listStores } from "@tako/db";
-import { alternarSecao, removerSecao, salvarSecao } from "../../actions";
+import { listAllBanners, listAllGames, listAllSections, listStores } from "@tako/db";
+import { alternarBanner, alternarSecao, removerBanner, removerSecao, salvarBanner, salvarSecao } from "../../actions";
 import styles from "../../admin.module.css";
 
 export const dynamic = "force-dynamic";
@@ -24,9 +24,14 @@ function descreveRegra(rule: { kind: string } & Record<string, unknown>): string
 }
 
 /** Gestão da home: seções, regra, ordem, janela e publicação (PRD §12.4). */
-export default async function HomeAdminPage({ searchParams }: { searchParams: Promise<{ ok?: string }> }) {
-  const { ok } = await searchParams;
-  const [sections, games, stores] = await Promise.all([listAllSections(), listAllGames(), listStores()]);
+export default async function HomeAdminPage({ searchParams }: { searchParams: Promise<{ ok?: string; erro?: string }> }) {
+  const { ok, erro } = await searchParams;
+  const [sections, banners, games, stores] = await Promise.all([
+    listAllSections(),
+    listAllBanners(),
+    listAllGames(),
+    listStores(),
+  ]);
 
   return (
     <>
@@ -36,7 +41,111 @@ export default async function HomeAdminPage({ searchParams }: { searchParams: Pr
           <p>Seção vazia não aparece na loja. A ordem é a posição, do menor para o maior.</p>
         </div>
       </div>
-      {ok !== undefined && <div className={styles["ok"]}>Home atualizada.</div>}
+      {(ok !== undefined || erro !== undefined) && (
+        <div className={erro === undefined ? styles["ok"] : styles["error"]}>
+          {erro === "banner" ? "Informe o título do banner." : "Home atualizada."}
+        </div>
+      )}
+
+      <section className={styles["card"]}>
+        <h2>Banner principal</h2>
+        <p className={styles["muted"]}>
+          A home mostra até três banners publicados, na ordem da posição. Banner sem jogo leva ao catálogo.
+        </p>
+        {banners.length === 0 ? (
+          <p className={styles["muted"]}>Nenhum banner cadastrado.</p>
+        ) : (
+          <table className={styles["table"]}>
+            <thead>
+              <tr>
+                <th>Pos.</th>
+                <th>Título</th>
+                <th>Jogo</th>
+                <th>Estado</th>
+                <th>Ações</th>
+              </tr>
+            </thead>
+            <tbody>
+              {banners.map((banner) => (
+                <tr key={banner.id}>
+                  <td className={styles["muted"]}>{banner.position}</td>
+                  <td>
+                    {banner.title}
+                    {banner.eyebrow !== null && <div className={styles["muted"]}>{banner.eyebrow}</div>}
+                  </td>
+                  <td className={styles["muted"]}>{banner.gameTitle ?? "—"}</td>
+                  <td>
+                    <span className={`${styles["badge"]} ${banner.published ? styles["published"] : styles["hidden"]}`}>
+                      {banner.published ? "publicado" : "oculto"}
+                    </span>
+                  </td>
+                  <td>
+                    <div className={styles["actions"]}>
+                      <form action={alternarBanner}>
+                        <input type="hidden" name="id" value={banner.id} />
+                        <input type="hidden" name="publicado" value={banner.published ? "0" : "1"} />
+                        <button type="submit" className={styles["secondary"]}>
+                          {banner.published ? "Ocultar" : "Publicar"}
+                        </button>
+                      </form>
+                      <form action={removerBanner}>
+                        <input type="hidden" name="id" value={banner.id} />
+                        <button type="submit" className={styles["danger"]}>
+                          Remover
+                        </button>
+                      </form>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+        <form action={salvarBanner} className={styles["form"]}>
+          <div className={styles["grid2"]}>
+            <label className={styles["field"]}>
+              <span>Título</span>
+              <input name="titulo" required />
+            </label>
+            <label className={styles["field"]}>
+              <span>Sobretítulo</span>
+              <input name="sobretitulo" placeholder="Em destaque" />
+            </label>
+            <label className={styles["field"]}>
+              <span>Jogo (opcional)</span>
+              <select name="jogoId" defaultValue="">
+                <option value="">Nenhum (leva ao catálogo)</option>
+                {games.map((game) => (
+                  <option key={game.id} value={game.id}>
+                    {game.title}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className={styles["field"]}>
+              <span>Texto do botão</span>
+              <input name="cta" placeholder="Ver o jogo" />
+            </label>
+            <label className={styles["field"]}>
+              <span>Subtítulo</span>
+              <input name="subtitulo" />
+            </label>
+            <label className={styles["field"]}>
+              <span>Posição</span>
+              <input name="posicao" type="number" defaultValue={banners.length} min={0} />
+            </label>
+          </div>
+          <label className={styles["field"]} style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+            <input type="checkbox" name="publicado" defaultChecked />
+            <span>Publicar agora</span>
+          </label>
+          <div className={styles["actions"]}>
+            <button type="submit" className={styles["primary"]}>
+              Adicionar banner
+            </button>
+          </div>
+        </form>
+      </section>
 
       <section className={styles["card"]}>
         <h2>Seções</h2>

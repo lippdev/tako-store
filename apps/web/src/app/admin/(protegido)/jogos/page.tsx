@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { listAllGames } from "@tako/db";
-import { publicarJogo } from "../../actions";
+import { criarJogo, publicarJogo } from "../../actions";
 import styles from "../../admin.module.css";
 
 export const dynamic = "force-dynamic";
@@ -9,9 +9,9 @@ export const dynamic = "force-dynamic";
 export default async function JogosPage({
   searchParams,
 }: {
-  searchParams: Promise<{ ok?: string; filtro?: string }>;
+  searchParams: Promise<{ ok?: string; filtro?: string; erro?: string; slug?: string }>;
 }) {
-  const { ok, filtro } = await searchParams;
+  const { ok, filtro, erro, slug } = await searchParams;
   const games = await listAllGames();
   const filtered = games.filter((game) => {
     if (filtro === "publicados") return game.published;
@@ -41,6 +41,49 @@ export default async function JogosPage({
         </div>
       </div>
       {ok !== undefined && <div className={styles["ok"]}>Alteração registrada.</div>}
+      {erro === "slug" && (
+        <div className={styles["error"]}>
+          Já existe um jogo com o endereço <code>{slug ?? ""}</code>. Troque o slug ou edite o jogo existente.
+        </div>
+      )}
+      {erro === "jogo" && <div className={styles["error"]}>Informe o título do jogo.</div>}
+
+      <section className={styles["card"]}>
+        <h2>Novo jogo</h2>
+        <p className={styles["muted"]}>
+          O jogo nasce oculto; publique depois de completar os dados, as imagens e os produtos. O endereço (slug) sai do
+          título e não pode repetir.
+        </p>
+        <form action={criarJogo} className={styles["form"]}>
+          <div className={styles["grid2"]}>
+            <label className={styles["field"]}>
+              <span>Título</span>
+              <input name="titulo" required placeholder="Nome do jogo" />
+            </label>
+            <label className={styles["field"]}>
+              <span>Slug (opcional)</span>
+              <input name="slug" placeholder="vem do título" />
+            </label>
+            <label className={styles["field"]}>
+              <span>Título original (opcional)</span>
+              <input name="tituloOriginal" />
+            </label>
+            <label className={styles["field"]}>
+              <span>Lançamento (opcional)</span>
+              <input type="date" name="lancamento" />
+            </label>
+            <label className={styles["field"]}>
+              <span>Gêneros (vírgula)</span>
+              <input name="generos" placeholder="Aventura, RPG" />
+            </label>
+          </div>
+          <div className={styles["actions"]}>
+            <button type="submit" className={styles["primary"]}>
+              Criar jogo
+            </button>
+          </div>
+        </form>
+      </section>
 
       <section className={styles["card"]}>
         <table className={styles["table"]}>

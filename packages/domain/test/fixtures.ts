@@ -44,6 +44,8 @@ export function source(overrides: Partial<Source> = {}): Source {
     status: "approved",
     lastRunAt: null,
     consecutiveFailures: 0,
+    feedUrl: null,
+    fieldMap: {},
     ...overrides,
   };
 }
