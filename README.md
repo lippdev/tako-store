@@ -3,78 +3,100 @@
 Loja web de jogos e comparador de preços do ecossistema [Tako](https://github.com/lippdev/tako-launcher). O usuário
 descobre jogos, compara ofertas válidas para o Brasil e conclui a compra no site da loja escolhida.
 
-**Status: Fase 0 — fundação.** O repositório tem o design system, o método de trabalho e o processo. As telas de
-produto começam na Fase 1 (catálogo e administração).
+**Status: fases 0 a 3 do PRD entregues com dados fictícios.** Catálogo, ofertas, painel administrativo, importação e
+loja pública funcionam de ponta a ponta. As integrações reais de loja (OFR-008/009) dependem de acesso a parceiros.
 
 - Produto, escopo e regras de preço: [`docs/PRD.md`](docs/PRD.md)
 - Decisões com contexto: [`docs/adr/`](docs/adr/)
 - Como contribuir (Git Flow, commits, PR): [`CONTRIBUTING.md`](CONTRIBUTING.md)
 - Como um agente deve trabalhar aqui: [`AGENTS.md`](AGENTS.md)
 
-## Estrutura
+## O que existe
 
-```
-design/desktop/        design system do Tako Launcher, cópia somente leitura (+ ORIGEM.md)
-  components/<Nome>/   a especificação de cada uma das 90 peças
-  tokens.css           as variáveis dos temas e as classes de tipografia
-  assets/, fonts/      ícones, marca, Poppins e Plus Jakarta Sans
-web/                   app Vite + React + TypeScript (galeria e base visual)
-  src/components/      os componentes do sistema, com a demo de cada um
-  src/app/             as telas
-  src/dev/             galeria (#/componentes) e base visual (#/dev)
-.claude/skills/        skills do lippstack que este repositório usa (+ ORIGEM.md)
-scripts/               sincronia do design system e dos skills, e as conferências
-docs/                  PRD e ADRs
-```
+| Área | Estado |
+| :- | :- |
+| Catálogo e produtos | Jogo, edição, DLC e bundle; identificadores por fonte; imagens com origem |
+| Ofertas e preço | Menor preço elegível por produto, região, moeda, disponibilidade e validade; empate documentado |
+| Painel | Login com perfis, jogos, vínculos, ofertas, lojas, fontes, home e qualidade |
+| Importação | Contrato de conector, fonte de demonstração, importação de arquivo JSON/CSV com erro por linha |
+| Loja pública | Home configurável, catálogo com filtros na URL, página do jogo, busca com sugestões, redirecionamento seguro, sitemap |
+| Integrações reais | **Não**: depende de acesso e contrato com as lojas (PRD §9) |
+
+Todos os dados do seed são fictícios: lojas, jogos, preços e imagens de demonstração. O rodapé da loja diz isso.
 
 ## Rodar
 
-Precisa de Node 24.
+Precisa de Node 24 e Docker (para o banco).
 
 ```bash
-cd web
 npm install
-npm run dev          # http://localhost:5174
+npm run db:up          # Postgres 17 em docker compose
+npm run db:migrate     # schema
+npm run db:seed        # catálogo de demonstração
+
+npm run dev            # http://localhost:5174
 ```
 
-Rotas: `#/` início, `#/componentes` galeria, `#/dev` base visual (temas, tipografia, paleta, ícones).
+Rotas:
 
-Verificação antes do PR:
+| Rota | O que é |
+| :- | :- |
+| `/` | home com banners e seções configuradas |
+| `/jogos` | catálogo com filtros e ordenação na URL |
+| `/jogo/<slug>` | página do jogo, produtos e ofertas elegíveis |
+| `/ir/<id-da-oferta>` | redirecionamento para a loja (domínio validado) |
+| `/admin` | painel (login `admin@tako.dev` / `tako-demo-2026`) |
+| `/dev` e `/dev/componentes` | base visual e galeria do design system |
+
+Importação pelo worker:
 
 ```bash
-cd web
-npm run typecheck
-npm run lint
-npm run build
-
-node ../scripts/check.mjs    # ou, da raiz: node scripts/check.mjs
+npm run worker -- sources                        # fontes e conector disponível
+npm run worker -- import --source arquivo-demo   # importa a fonte de demonstração
+npm run worker -- import --source arquivo-demo --file ./catalogo.csv
 ```
 
-## O design system
+## Estrutura
 
-O visual não é redefinido aqui: ele vem do design system do Tako Launcher, em
-[`design/desktop/`](design/desktop/). O app consome uma cópia gerada — tokens, fontes, ícones e marca — para o build
-não depender da pasta de design.
+```
+apps/
+  web/                 Next 16: loja pública, painel e rotas de API
+  worker/              importação (coleta → validação → vínculo → oferta)
+packages/
+  domain/              regras puras: preço elegível, empate, vencimento, busca, seções
+  db/                  schema, migrações, seed e repositórios (SQL escrito à mão)
+  connectors/          contrato de conector, fonte de demonstração e importador
+design/desktop/        design system do Tako Launcher, cópia somente leitura (+ ORIGEM.md)
+.claude/skills/        skills do lippstack usados aqui (+ ORIGEM.md)
+docs/                  PRD e ADRs
+scripts/               sincronias, conferências e capas de demonstração
+```
+
+## Verificar
 
 ```bash
-node scripts/sync-design-system.mjs        # traz o design system do launcher (main)
-cd web && npm run sync:design              # gera tokens, fontes, ícones e marca no app
+node scripts/check.mjs   # arquivos, skills, tokens e ícones em dia
+npm run typecheck        # todos os workspaces
+npm run lint             # apps/web
+npm test                 # domínio, banco (precisa do Postgres) e conectores
+npm run build            # build de produção do Next
 ```
 
-A decisão de usar a versão **atual** do sistema, e não a paleta antiga que ainda aparece na §16 do PRD, está na
-[ADR-0001](docs/adr/0001-design-system-adaptado-do-launcher.md).
+## Design system
 
-## O método
-
-Os skills de engenharia e de design do [lippstack](https://github.com/lippdev/lippstack) estão em
-[`.claude/skills/`](.claude/skills/): `investigate` para achar causa de bug, `qa` para verificar, `ship` para abrir o
-PR, e os de design para o visual. Para atualizar:
+O visual vem de [`design/desktop/`](design/desktop/), cópia do launcher. O app consome uma versão gerada — tokens,
+fontes, ícones e marca:
 
 ```bash
-node scripts/sync-skills.mjs
+node scripts/sync-design-system.mjs   # traz do launcher
+npm run sync:design                   # gera tokens, fontes, ícones e marca no app
 ```
+
+A decisão de usar a versão atual do sistema, e não a paleta antiga da §16 do PRD, está na
+[ADR-0001](docs/adr/0001-design-system-adaptado-do-launcher.md). A stack está na
+[ADR-0003](docs/adr/0003-stack-next-postgres-worker.md).
 
 ## Processo
 
 Git Flow, conforme [`CONTRIBUTING.md`](CONTRIBUTING.md): `main` é produção, `develop` é a integração, `feature/*`
-sai da `develop` e volta por pull request com commits pequenos. Release e hotfix são os únicos que entram na `main`.
+sai da `develop` e volta por pull request com commits pequenos.
