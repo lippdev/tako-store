@@ -85,14 +85,23 @@ export default async function LojasPage({ searchParams }: { searchParams: Promis
               </label>
               <label className={styles["field"]}>
                 <span>Valor do afiliado (sua chave)</span>
-                <input name="afiliadoValor" defaultValue={store.affiliateValue ?? ""} placeholder="tako-20" />
+                <input
+                  name="afiliadoValor"
+                  type="password"
+                  autoComplete="new-password"
+                  placeholder={store.affiliateValue === null ? "tako-20" : "cadastrada — deixe em branco para manter"}
+                />
               </label>
               <label className={styles["field"]}>
                 <span>Molde do link (opcional, com {"{url}"})</span>
                 <input
                   name="afiliadoMolde"
-                  defaultValue={store.affiliateTemplate ?? ""}
-                  placeholder="https://loja.example/afiliado?url={url}"
+                  autoComplete="off"
+                  placeholder={
+                    store.affiliateTemplate === null
+                      ? "https://loja.example/afiliado?url={url}"
+                      : "cadastrado — deixe em branco para manter"
+                  }
                 />
               </label>
             </div>
@@ -117,6 +126,26 @@ export default async function LojasPage({ searchParams }: { searchParams: Promis
                   : "endereço da oferta, sem marcação"}{" "}
               · domínios permitidos: {store.allowedDomains.join(", ") || "nenhum"}
             </p>
+            <p className={styles["muted"]}>
+              {store.affiliateValue === null ? "Nenhuma chave cadastrada." : "Chave cadastrada. O valor não volta para a tela."}{" "}
+              {store.affiliateTemplate === null
+                ? "Nenhum molde cadastrado."
+                : `Molde cadastrado (domínio ${templateDomain(store.affiliateTemplate) ?? "—"}). O endereço não volta para a tela.`}
+            </p>
+            <div className={styles["actions"]}>
+              {store.affiliateValue !== null && (
+                <label className={styles["field"]} style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                  <input type="checkbox" name="removerChave" />
+                  <span>Remover a chave</span>
+                </label>
+              )}
+              {store.affiliateTemplate !== null && (
+                <label className={styles["field"]} style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                  <input type="checkbox" name="removerMolde" />
+                  <span>Remover o molde</span>
+                </label>
+              )}
+            </div>
             <label className={styles["field"]} style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
               <input type="checkbox" name="ativa" defaultChecked={store.enabled} />
               <span>Loja ativa na loja pública</span>
