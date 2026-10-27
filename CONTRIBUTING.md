@@ -60,6 +60,28 @@ Um PR por assunto, com base na `develop` — exceto release e hotfix, que aponta
 
 O merge é do revisor. Quem abriu o PR não faz o merge.
 
+## Proteção das branches
+
+`main` e `develop` são protegidas: PR obrigatório, CI verde (`verificar`) e sem force-push. Quem tem administração do
+repositório aplica com:
+
+```bash
+for b in main develop; do
+  gh api -X PUT "repos/lippdev/tako-store/branches/$b/protection" \
+    -f "required_status_checks[strict]=true" \
+    -f 'required_status_checks[contexts][]=verificar' \
+    -F "enforce_admins=false" \
+    -F "required_pull_request_reviews[required_approving_review_count]=1" \
+    -F "required_pull_request_reviews[dismiss_stale_reviews]=true" \
+    -F "restrictions=null" \
+    -F "allow_force_pushes=false" \
+    -F "allow_deletions=false"
+done
+```
+
+A integração do GitHub que abre os PRs daqui não tem permissão de administração para aplicar isso sozinha (a API
+responde `403 Resource not accessible by integration`), então a primeira vez é manual.
+
 ## Verificação antes de abrir o PR
 
 Em `web/`:
