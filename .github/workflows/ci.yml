@@ -9,6 +9,25 @@ on:
 jobs:
   verificar:
     runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: tako
+          POSTGRES_PASSWORD: tako
+          POSTGRES_DB: tako_store
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U tako -d tako_store"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 20
+
+    env:
+      DATABASE_URL: postgres://tako:tako@localhost:5432/tako_store
+
     steps:
       - uses: actions/checkout@v4
 
@@ -16,24 +35,28 @@ jobs:
         with:
           node-version: 24
           cache: npm
-          cache-dependency-path: web/package-lock.json
+          cache-dependency-path: package-lock.json
 
       # Arquivos obrigatórios, frontmatter dos skills e o que o app gera a partir do design system.
       - name: Conferências do repositório
         run: node scripts/check.mjs
 
       - name: Instalar
-        working-directory: web
         run: npm ci
 
       - name: Tipo
-        working-directory: web
         run: npm run typecheck
 
       - name: Lint
-        working-directory: web
         run: npm run lint
 
+      - name: Migrar e semear o banco de teste
+        run: |
+          npm run db:migrate
+          npm run db:seed
+
       - name: Build
-        working-directory: web
         run: npm run build
+
+      - name: Testes
+        run: npm test
