@@ -48,7 +48,6 @@ async function main(): Promise<void> {
     affiliateParam: "utm_source",
     affiliateValue: "tako-store",
     allowedDomains: ["prismagames.example"],
-    linkKind: "affiliate",
     attribution: "Preço e disponibilidade informados pela Prisma Games.",
   });
   const bazar = await upsertStore({

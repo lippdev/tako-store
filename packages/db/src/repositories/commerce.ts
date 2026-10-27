@@ -322,6 +322,17 @@ export async function listPriceHistoryForProducts(
   return byProduct;
 }
 
+/** Cliques por oferta nos últimos dias: o retorno do link de afiliado (PAR-002). */
+export async function clicksByOffer(days = 30): Promise<Map<string, number>> {
+  const rows = await query<{ offerId: string; clicks: number }>(
+    `select offer_id as "offerId", count(*)::int as clicks from offer_clicks
+     where created_at >= now() - make_interval(days => $1)
+     group by offer_id`,
+    [days],
+  );
+  return new Map(rows.map((row) => [row.offerId, row.clicks]));
+}
+
 export async function recordOfferClick(offerId: string): Promise<void> {
   await query("insert into offer_clicks (offer_id) values ($1)", [offerId]);
 }

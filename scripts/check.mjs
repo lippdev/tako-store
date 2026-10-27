@@ -23,6 +23,7 @@ const REQUIRED = [
   "docs/acessibilidade.md",
   "docs/backup.md",
   "docs/monitoracao.md",
+  "docs/integracoes.md",
   "apps/web/package.json",
   "apps/worker/package.json",
   "packages/domain/src/index.ts",

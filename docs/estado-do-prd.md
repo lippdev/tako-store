@@ -34,17 +34,17 @@ o retrato da implementação e envelhece com ela.
 | Item | Estado | Onde |
 | :- | :- | :- |
 | PAR-001 Cadastro de lojas | ✅ | `/admin/lojas` |
-| PAR-002 Gestão de links | ✅ | Tipo de link, domínios permitidos e atribuição por loja |
+| PAR-002 Gestão de links | ✅ | Tipo de link, domínios permitidos, atribuição, parâmetro ou molde de afiliado por loja; link montado no servidor e validado no clique; cliques por oferta no painel |
 | PAR-003 Comparação sem favorecimento | ✅ | `compareOffers` + teste com loja parceira mais cara |
 | PAR-004 Matriz de fontes | ✅ | `/admin/fontes`: acesso, formato, cobertura em BRL, frequência, documentação, termos, atribuição e situação por fonte, inclusive candidatas; `sourceIsUsable` decide quem alimenta a comparação |
 | OFR-001 Modelo de ofertas | ✅ | Tabela `offers` + histórico `price_observations` |
 | OFR-002 Motor de menor preço | ✅ | `packages/domain/src/offers.ts`, 41 testes |
 | OFR-003 Importador estruturado | ✅ | `importStructured` (JSON/CSV) com erro por linha |
-| OFR-004 Contrato de conectores | ✅ | `packages/connectors`, fonte de demonstração |
+| OFR-004 Contrato de conectores | ✅ | `packages/connectors`: conector de demonstração, importador de arquivo e conector genérico de feed por URL |
 | OFR-005 Fila de revisão de vínculos | ✅ | `/admin/vinculos`, regra de confiança em `suggestProduct` |
 | OFR-006 Administração de fontes | ✅ | Pausar, executar, ver execuções com erros abertos e reprocessar pelo painel ou por `npm run worker -- retry --run <id>`; o erro resolvido fica marcado com a execução que o resolveu |
 | OFR-007 Expiração de ofertas | ✅ | `evaluateOffer` + `/admin/ofertas` com o veredito |
-| OFR-008 Primeiro conector real | ⛔ | Depende de acesso e contrato com a loja |
+| OFR-008 Primeiro conector real | 🟡 | Mecanismo pronto: feed por URL com de-para, execução pelo painel, agendador e erro por linha; falta o acesso autorizado de um parceiro |
 | OFR-009 Segunda fonte real | ⛔ | Idem |
 
 ## Fase 3 — Loja pública
