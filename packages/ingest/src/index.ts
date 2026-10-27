@@ -6,6 +6,7 @@
 
 import { suggestProduct, validateOfferRow, type ConnectorOutput, type RawOffer } from "@tako/connectors";
 import type { Source } from "@tako/domain";
+import { collectForSource, type CollectOptions } from "./collect";
 import {
   approvedProductFor,
   autoApproveMapping,
@@ -24,6 +25,8 @@ import {
   upsertExternalProduct,
   upsertOffer,
 } from "@tako/db";
+
+export * from "./collect";
 
 export interface ImportedError {
   line: number | null;
@@ -160,6 +163,25 @@ export async function importCollected(source: Source, collected: ConnectorOutput
   await touchSourceRun(source.id, status === "failed");
 
   return { runId, status, received: collected.rows.length + collected.errors.length, accepted, linked, rejected, message, errors };
+}
+
+/**
+ * Coleta e importa uma fonte: execução registrada mesmo quando a coleta falha, com o motivo no relatório.
+ * `triggeredBy` diz quem disparou ("worker", "painel", "agendador").
+ */
+export async function importSource(source: Source, triggeredBy: string, options: CollectOptions = {}): Promise<RunSummary> {
+  let collected;
+  try {
+    collected = await collectForSource(source, options);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    const runId = await startIngestionRun(source.id, triggeredBy);
+    await recordIngestionError(runId, { line: null, code: "coleta", message });
+    await finishIngestionRun(runId, { status: "failed", received: 0, accepted: 0, rejected: 0, message });
+    await touchSourceRun(source.id, true);
+    throw new Error(`coleta de "${source.slug}" falhou: ${message}`);
+  }
+  return importCollected(source, collected, triggeredBy);
 }
 
 /**

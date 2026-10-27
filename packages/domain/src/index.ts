@@ -5,6 +5,7 @@ export * from "./search";
 export * from "./home";
 export * from "./ordering";
 export * from "./links";
+export * from "./affiliate";
 export * from "./history";
 export * from "./duplicates";
 export * from "./media";

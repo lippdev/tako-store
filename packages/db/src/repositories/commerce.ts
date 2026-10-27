@@ -5,9 +5,11 @@ import type { ActivationPlatform, Availability, Offer, PartnerStatus, Source, So
 import { query, queryOne } from "../pool";
 import { toIso, toOffer, toSource, toStore, type OfferRow, type SourceRow, type StoreRow } from "../mappers";
 
-const STORE_COLUMNS = `id, slug, name, partner_status, enabled, allowed_domains, link_kind, attribution, regions, currencies`;
+const STORE_COLUMNS = `id, slug, name, partner_status, enabled, allowed_domains, link_kind, attribution, regions,
+  currencies, affiliate_param, affiliate_value, affiliate_template`;
 const SOURCE_COLUMNS = `id, slug, name, kind, enabled, max_age_hours, regions, currencies, notes, access, format,
-  covers_brl, cadence_hours, docs_url, terms_url, attribution, status, last_run_at, consecutive_failures`;
+  covers_brl, cadence_hours, docs_url, terms_url, attribution, status, last_run_at, consecutive_failures, feed_url,
+  field_map`;
 const OFFER_COLUMNS = `id, product_id, store_id, source_id, price_cents, reference_price_cents, currency, region,
   platform, availability, coupon, subscription, url, observed_at`;
 
@@ -33,13 +35,17 @@ export interface StoreInput {
   attribution?: string | null;
   regions?: string[];
   currencies?: string[];
+  affiliateParam?: string | null;
+  affiliateValue?: string | null;
+  affiliateTemplate?: string | null;
 }
 
 /** Cadastra a loja antes de existir integração (PAR-001). O estado da parceria é só administrativo. */
 export async function upsertStore(input: StoreInput): Promise<Store> {
   const row = await queryOne<StoreRow>(
-    `insert into stores (slug, name, partner_status, enabled, allowed_domains, link_kind, attribution, regions, currencies)
-     values ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+    `insert into stores (slug, name, partner_status, enabled, allowed_domains, link_kind, attribution, regions, currencies,
+       affiliate_param, affiliate_value, affiliate_template)
+     values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
      on conflict (slug) do update set
        name = excluded.name,
        partner_status = excluded.partner_status,
@@ -49,6 +55,9 @@ export async function upsertStore(input: StoreInput): Promise<Store> {
        attribution = excluded.attribution,
        regions = excluded.regions,
        currencies = excluded.currencies,
+       affiliate_param = excluded.affiliate_param,
+       affiliate_value = excluded.affiliate_value,
+       affiliate_template = excluded.affiliate_template,
        updated_at = now()
      returning ${STORE_COLUMNS}`,
     [
@@ -61,6 +70,9 @@ export async function upsertStore(input: StoreInput): Promise<Store> {
       input.attribution ?? null,
       input.regions ?? ["BR"],
       input.currencies ?? ["BRL"],
+      input.affiliateParam ?? null,
+      input.affiliateValue ?? null,
+      input.affiliateTemplate ?? null,
     ],
   );
   if (row === null) throw new Error("upsert de loja não devolveu linha");
@@ -96,13 +108,15 @@ export interface SourceInput {
   termsUrl?: string | null;
   attribution?: string | null;
   status?: Source["status"];
+  feedUrl?: string | null;
+  fieldMap?: Record<string, string>;
 }
 
 export async function upsertSource(input: SourceInput): Promise<Source> {
   const row = await queryOne<SourceRow>(
     `insert into sources (slug, name, kind, enabled, max_age_hours, regions, currencies, notes, access, format,
-       covers_brl, cadence_hours, docs_url, terms_url, attribution, status)
-     values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+       covers_brl, cadence_hours, docs_url, terms_url, attribution, status, feed_url, field_map)
+     values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
      on conflict (slug) do update set
        name = excluded.name,
        kind = excluded.kind,
@@ -119,6 +133,8 @@ export async function upsertSource(input: SourceInput): Promise<Source> {
        terms_url = excluded.terms_url,
        attribution = excluded.attribution,
        status = excluded.status,
+       feed_url = excluded.feed_url,
+       field_map = excluded.field_map,
        updated_at = now()
      returning ${SOURCE_COLUMNS}`,
     [
@@ -138,6 +154,8 @@ export async function upsertSource(input: SourceInput): Promise<Source> {
       input.termsUrl ?? null,
       input.attribution ?? null,
       input.status ?? "candidate",
+      input.feedUrl ?? null,
+      JSON.stringify(input.fieldMap ?? {}),
     ],
   );
   if (row === null) throw new Error("upsert de fonte não devolveu linha");
@@ -302,6 +320,17 @@ export async function listPriceHistoryForProducts(
     byProduct.set(row.productId, list);
   }
   return byProduct;
+}
+
+/** Cliques por oferta nos últimos dias: o retorno do link de afiliado (PAR-002). */
+export async function clicksByOffer(days = 30): Promise<Map<string, number>> {
+  const rows = await query<{ offerId: string; clicks: number }>(
+    `select offer_id as "offerId", count(*)::int as clicks from offer_clicks
+     where created_at >= now() - make_interval(days => $1)
+     group by offer_id`,
+    [days],
+  );
+  return new Map(rows.map((row) => [row.offerId, row.clicks]));
 }
 
 export async function recordOfferClick(offerId: string): Promise<void> {
@@ -599,4 +628,16 @@ export async function approvedProductFor(externalProductId: string): Promise<str
     [externalProductId],
   );
   return row?.product_id ?? null;
+}
+
+/** Fontes com coleta devida agora: ativas, aprovadas e fora do intervalo desde a última execução (OFR-004). */
+export async function listDueSources(now = new Date()): Promise<Source[]> {
+  const rows = await query<SourceRow>(
+    `select ${SOURCE_COLUMNS} from sources
+     where enabled and status = 'approved'
+       and (last_run_at is null or last_run_at + make_interval(hours => coalesce(cadence_hours, max_age_hours)) <= $1)
+     order by last_run_at nulls first, name`,
+    [now],
+  );
+  return rows.map(toSource);
 }

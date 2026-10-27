@@ -1,4 +1,4 @@
-import { listAllGames, listOffersForProducts, listProducts, listSources, listStores } from "@tako/db";
+import { clicksByOffer, listAllGames, listOffersForProducts, listProducts, listSources, listStores } from "@tako/db";
 import { evaluateOffer, formatBRL } from "@tako/domain";
 import styles from "../../admin.module.css";
 
@@ -25,6 +25,7 @@ export default async function OfertasPage() {
     listSources(),
   ]);
   const offers = await listOffersForProducts(products.map((product) => product.id));
+  const clicks = await clicksByOffer(30);
 
   const storeById = new Map(stores.map((store) => [store.id, store]));
   const context = {
@@ -67,6 +68,7 @@ export default async function OfertasPage() {
               <th>Loja</th>
               <th>Preço</th>
               <th>Observada</th>
+              <th>Cliques (30 d)</th>
               <th>Estado</th>
             </tr>
           </thead>
@@ -77,6 +79,7 @@ export default async function OfertasPage() {
                 <td className={styles["muted"]}>{store}</td>
                 <td>{formatBRL(offer.priceCents)}</td>
                 <td className={styles["muted"]}>{new Date(offer.observedAt).toLocaleString("pt-BR")}</td>
+                <td className={styles["muted"]}>{clicks.get(offer.id) ?? 0}</td>
                 <td>
                   {verdict.eligible ? (
                     <span className={`${styles["badge"]} ${styles["published"]}`}>elegível</span>

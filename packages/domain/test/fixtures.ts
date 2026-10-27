@@ -16,6 +16,9 @@ export function store(overrides: Partial<Store> = {}): Store {
     attribution: null,
     regions: ["BR"],
     currencies: ["BRL"],
+    affiliateParam: null,
+    affiliateValue: null,
+    affiliateTemplate: null,
     ...overrides,
   };
 }
@@ -41,6 +44,8 @@ export function source(overrides: Partial<Source> = {}): Source {
     status: "approved",
     lastRunAt: null,
     consecutiveFailures: 0,
+    feedUrl: null,
+    fieldMap: {},
     ...overrides,
   };
 }

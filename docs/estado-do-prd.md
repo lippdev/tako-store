@@ -23,7 +23,7 @@ o retrato da implementação e envelhece com ela.
 | CAT-001 Jogos e produtos | ✅ | `packages/domain/src/catalog.ts`, tabelas `games`/`products` |
 | CAT-002 Autenticação administrativa | ✅ | `packages/db/src/auth.ts` (scrypt, sessão revogável, segundo fator TOTP em `/admin/seguranca` com login em duas etapas) |
 | CAT-003 Perfis e permissões | ✅ | `PERMISSIONS` verificado em cada ação, `/admin/usuarios` para criar usuário, trocar papel, desativar e revogar sessões, `/admin/auditoria` com filtro por registro |
-| CAT-004 Gestão de jogos | ✅ | `/admin/jogos` (editar, publicar, ocultar, arquivar, auditoria) |
+| CAT-004 Gestão de jogos | ✅ | `/admin/jogos`: criar (slug automático, nasce oculto), editar, publicar, ocultar, arquivar, com auditoria |
 | CAT-005 Gestão de imagens | ✅ | Biblioteca em `/admin/jogos/[id]`: capa/fundo/logo substituem a anterior, capturas na galeria, toda imagem com origem e atribuição; galeria na página do jogo |
 | CAT-006 Busca básica | ✅ | `foldText`, `/api/busca`, `/jogos?q=` |
 | CAT-007 Identificadores externos | ✅ | Seção no cadastro do jogo: associar, listar por fonte e remover, com auditoria |
@@ -34,24 +34,24 @@ o retrato da implementação e envelhece com ela.
 | Item | Estado | Onde |
 | :- | :- | :- |
 | PAR-001 Cadastro de lojas | ✅ | `/admin/lojas` |
-| PAR-002 Gestão de links | ✅ | Tipo de link, domínios permitidos e atribuição por loja |
+| PAR-002 Gestão de links | ✅ | Tipo de link, domínios permitidos, atribuição, parâmetro ou molde de afiliado por loja; link montado no servidor e validado no clique; cliques por oferta no painel |
 | PAR-003 Comparação sem favorecimento | ✅ | `compareOffers` + teste com loja parceira mais cara |
 | PAR-004 Matriz de fontes | ✅ | `/admin/fontes`: acesso, formato, cobertura em BRL, frequência, documentação, termos, atribuição e situação por fonte, inclusive candidatas; `sourceIsUsable` decide quem alimenta a comparação |
 | OFR-001 Modelo de ofertas | ✅ | Tabela `offers` + histórico `price_observations` |
 | OFR-002 Motor de menor preço | ✅ | `packages/domain/src/offers.ts`, 41 testes |
 | OFR-003 Importador estruturado | ✅ | `importStructured` (JSON/CSV) com erro por linha |
-| OFR-004 Contrato de conectores | ✅ | `packages/connectors`, fonte de demonstração |
+| OFR-004 Contrato de conectores | ✅ | `packages/connectors`: conector de demonstração, importador de arquivo e conector genérico de feed por URL |
 | OFR-005 Fila de revisão de vínculos | ✅ | `/admin/vinculos`, regra de confiança em `suggestProduct` |
 | OFR-006 Administração de fontes | ✅ | Pausar, executar, ver execuções com erros abertos e reprocessar pelo painel ou por `npm run worker -- retry --run <id>`; o erro resolvido fica marcado com a execução que o resolveu |
 | OFR-007 Expiração de ofertas | ✅ | `evaluateOffer` + `/admin/ofertas` com o veredito |
-| OFR-008 Primeiro conector real | ⛔ | Depende de acesso e contrato com a loja |
+| OFR-008 Primeiro conector real | 🟡 | Mecanismo pronto: feed por URL com de-para, execução pelo painel, agendador e erro por linha; falta o acesso autorizado de um parceiro |
 | OFR-009 Segunda fonte real | ⛔ | Idem |
 
 ## Fase 3 — Loja pública
 
 | Item | Estado | Onde |
 | :- | :- | :- |
-| STO-001 Home configurável | ✅ | `/admin/home` + `selectSectionGames` |
+| STO-001 Home configurável | ✅ | `/admin/home`: banners (criar, publicar, remover, até três no carrossel da loja) e seções por regra, com `selectSectionGames` |
 | STO-002 Catálogo | ✅ | `/jogos` com filtros e ordenação na URL |
 | STO-003 Página do jogo | ✅ | `/jogo/[slug]` |
 | STO-004 Redirecionamento seguro | ✅ | `/ir/[offerId]` valida domínio e registra clique |
@@ -102,3 +102,6 @@ o retrato da implementação e envelhece com ela.
 | MFA para administradores | ✅ | TOTP em `/admin/seguranca`, login em duas etapas; código conferido contra o vetor do RFC 6238 |
 | Registro de ações | ✅ | `audit_events` gravado em toda ação e visível em `/admin/auditoria` |
 | Edições, DLCs e bundles | ✅ | Formulário de produto no cadastro do jogo, com tipo, edição, plataforma e dependência |
+| Banners da home | ✅ | `/admin/home`: criar, publicar, ocultar e remover; a loja mostra até três com navegação por pontos |
+| Chave de afiliado | ✅ | `/admin/lojas`: parâmetro + valor ou molde com `{url}`, validado contra os domínios permitidos; cliques por oferta em `/admin/ofertas` |
+| Coleta contínua | ✅ | `npm run worker -- due` e `daemon`, respeitando `cadence_hours`; unidades em `deploy/systemd/` |

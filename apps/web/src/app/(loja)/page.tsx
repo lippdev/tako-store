@@ -12,37 +12,57 @@ export const dynamic = "force-dynamic";
 export default async function HomePage() {
   const [shop, banners, sections] = await Promise.all([loadShop(), listLiveBanners(), listLiveSections()]);
   const rows = homeSections(shop, sections);
-  const hero = banners[0];
-  const heroGame = hero?.gameId === null || hero?.gameId === undefined
-    ? null
-    : (shop.games.find((game) => game.id === hero.gameId) ?? null);
-  const heroCard = heroGame === null ? null : cardFor(shop, heroGame);
+  const heroes = banners.map((banner, index) => {
+    const game = banner.gameId === null ? null : (shop.games.find((candidate) => candidate.id === banner.gameId) ?? null);
+    return { banner, game, card: game === null ? null : cardFor(shop, game), index };
+  });
 
   return (
     <>
-      {hero !== undefined && (
-        <section className={styles["hero"]} aria-label="Destaque">
-          {heroGame?.media.hero != null && (
-            <img className={styles["heroArt"]} src={heroGame.media.hero} alt="" aria-hidden="true" />
+      {heroes.length > 0 && (
+        <section className={styles["heroCarousel"]} aria-label="Destaques">
+          <ul className={styles["heroTrack"]}>
+            {heroes.map(({ banner, game, card, index }) => (
+              <li key={banner.id} id={`destaque-${String(index + 1)}`} className={styles["hero"]}>
+                {game?.media.hero != null && (
+                  <img className={styles["heroArt"]} src={game.media.hero} alt="" aria-hidden="true" />
+                )}
+                <div className={styles["heroBody"]}>
+                  {banner.eyebrow !== null && <p className="overline">{banner.eyebrow}</p>}
+                  {index === 0 ? (
+                    <h1 className="page-title">{banner.title}</h1>
+                  ) : (
+                    <h2 className="page-title">{banner.title}</h2>
+                  )}
+                  {banner.subtitle !== null && <p className={styles["heroText"]}>{banner.subtitle}</p>}
+                  <div className={styles["heroActions"]}>
+                    {card !== null && (
+                      <Link className={styles["cta"]} href={`/jogo/${card.game.slug}`}>
+                        {banner.ctaLabel ?? "Ver o jogo"}
+                      </Link>
+                    )}
+                    <Link className={styles["ghost"]} href="/jogos">
+                      Ver o catálogo
+                    </Link>
+                  </div>
+                  {card?.best != null && (
+                    <Preco
+                      priceCents={card.best.offer.priceCents}
+                      referencePriceCents={card.best.offer.referencePriceCents}
+                      withNote
+                    />
+                  )}
+                </div>
+              </li>
+            ))}
+          </ul>
+          {heroes.length > 1 && (
+            <nav className={styles["heroDots"]} aria-label="Escolher destaque">
+              {heroes.map(({ banner, index }) => (
+                <a key={banner.id} href={`#destaque-${String(index + 1)}`} aria-label={`Destaque ${String(index + 1)}: ${banner.title}`} />
+              ))}
+            </nav>
           )}
-          <div className={styles["heroBody"]}>
-            {hero.eyebrow !== null && <p className="overline">{hero.eyebrow}</p>}
-            <h1 className="page-title">{hero.title}</h1>
-            {hero.subtitle !== null && <p className={styles["heroText"]}>{hero.subtitle}</p>}
-            <div className={styles["heroActions"]}>
-              {heroCard !== null && (
-                <Link className={styles["cta"]} href={`/jogo/${heroCard.game.slug}`}>
-                  {hero.ctaLabel ?? "Ver o jogo"}
-                </Link>
-              )}
-              <Link className={styles["ghost"]} href="/jogos">
-                Ver o catálogo
-              </Link>
-            </div>
-            {heroCard?.best != null && (
-              <Preco priceCents={heroCard.best.offer.priceCents} referencePriceCents={heroCard.best.offer.referencePriceCents} withNote />
-            )}
-          </div>
         </section>
       )}
 

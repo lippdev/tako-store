@@ -20,9 +20,9 @@ domínio.
 | Catálogo e produtos | Jogo, edição, DLC e bundle; identificadores por fonte; biblioteca de imagens com procedência e galeria |
 | Curadoria | Revisão de duplicatas com impacto e união registrada em histórico; nenhuma união automática |
 | Ofertas e preço | Menor preço elegível por produto, região, moeda, disponibilidade e validade; empate documentado |
-| Painel | Login com perfis e segundo fator, jogos, duplicatas, vínculos, ofertas, lojas, fontes (matriz e reprocessamento), produtos, usuários, auditoria, home e qualidade |
-| Importação | Contrato de conector, fonte de demonstração, arquivo JSON/CSV com erro por linha e reprocessamento dos erros pelo painel |
-| Loja pública | Home configurável, catálogo com filtros na URL, página do jogo com galeria e histórico de preço, busca com sugestões, redirecionamento seguro, sitemap |
+| Painel | Login com perfis e segundo fator, jogos (criar, editar, imagens, identificadores), duplicatas, vínculos, ofertas com cliques, lojas com chave de afiliado, fontes (feed por URL, matriz, execução e reprocessamento), produtos, usuários, auditoria, home com banners e seções, qualidade |
+| Importação | Contrato de conector, feed por URL (JSON/CSV) com de-para de campos, arquivo local, erro por linha, reprocessamento pelo painel e agendador que respeita a cadência |
+| Loja pública | Home com carrossel de destaques, catálogo com filtros na URL, página do jogo com galeria e histórico de preço, busca com sugestões, redirecionamento com link de afiliado, sitemap |
 | Operação | `/api/health` com sinal de degradação, monitor em `scripts/healthcheck.mjs`, backup e restauração provados |
 | Integrações reais | **Não**: depende de acesso e contrato com as lojas (PRD §9) |
 
@@ -60,7 +60,12 @@ npm run worker -- runs                           # últimas execuções e erros 
 npm run worker -- import --source arquivo-demo   # importa a fonte de demonstração
 npm run worker -- import --source arquivo-demo --file ./catalogo.csv
 npm run worker -- retry --run <id>               # reprocessa os erros de uma execução
+npm run worker -- due                            # uma passada pelas fontes com coleta devida
+npm run worker -- daemon                         # agendador (60 s por padrão, respeita a cadência)
 ```
+
+Para ligar uma loja real — domínios, chave de afiliado, feed e agendamento — siga
+[`docs/integracoes.md`](docs/integracoes.md).
 
 O mesmo reprocessamento está no painel, em **Fontes → Erros aguardando reprocessamento**.
 
@@ -99,6 +104,18 @@ npm run typecheck        # todos os workspaces
 npm run lint             # apps/web
 npm test                 # domínio, banco (precisa do Postgres), conectores e ingestão
 npm run build            # build de produção do Next
+```
+
+## Deploy
+
+`deploy/` traz o que não depende de código para subir: unidades systemd para a loja e para o worker (`daemon`) e um
+`env.example` com as variáveis esperadas. O arquivo de ambiente real fica fora do repositório, em
+`/etc/tako-store/env`, com permissão 0600.
+
+```bash
+npm ci && npm run build
+sudo cp deploy/systemd/tako-*.service /etc/systemd/system/
+sudo systemctl daemon-reload && sudo systemctl enable --now tako-web tako-worker
 ```
 
 ## Design system
