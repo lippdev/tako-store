@@ -286,6 +286,7 @@ export async function recordIngestionError(
 export interface IngestionRun {
   id: string;
   sourceId: string;
+  sourceSlug: string;
   sourceName: string;
   status: string;
   triggeredBy: string;
@@ -300,7 +301,7 @@ export interface IngestionRun {
 
 export async function listIngestionRuns(limit = 30): Promise<IngestionRun[]> {
   return query<IngestionRun>(
-    `select r.id, r.source_id as "sourceId", s.name as "sourceName", r.status, r.triggered_by as "triggeredBy",
+    `select r.id, r.source_id as "sourceId", s.slug as "sourceSlug", s.name as "sourceName", r.status, r.triggered_by as "triggeredBy",
             r.received, r.accepted, r.rejected, r.message,
             r.started_at as "startedAt", r.finished_at as "finishedAt",
             (select count(*)::int from ingestion_errors e where e.run_id = r.id) as errors
@@ -318,6 +319,22 @@ export interface IngestionError {
   payload: unknown;
   resolvedAt: string | null;
   resolvedRunId: string | null;
+}
+
+export async function getIngestionRun(runId: string): Promise<{
+  id: string;
+  sourceId: string;
+  sourceSlug: string;
+  sourceName: string;
+  status: string;
+  startedAt: string;
+} | null> {
+  return queryOne(
+    `select r.id, r.source_id as "sourceId", s.slug as "sourceSlug", s.name as "sourceName", r.status,
+            r.started_at as "startedAt"
+     from ingestion_runs r join sources s on s.id = r.source_id where r.id = $1`,
+    [runId],
+  );
 }
 
 export async function listIngestionErrors(

@@ -11,6 +11,7 @@
     "@tako/connectors": "*",
     "@tako/db": "*",
     "@tako/domain": "*",
+    "@tako/ingest": "*",
     "tsx": "^4.23.15"
   },
   "devDependencies": {
