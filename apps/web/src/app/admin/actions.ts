@@ -729,7 +729,7 @@ export async function exportarCatalogo(): Promise<void> {
   const games = await listAllGames();
   await writeAudit({ actor: user, action: "catalogo:exportar", entity: "game", entityId: null, detail: { jogos: games.length } });
   const body = serializeCatalogFile(games, new Date());
-  await redirect(`/admin/jogos/exportar?arquivo=catalogo.json&conteudo=${encodeURIComponent(body)}`);
+  redirect(`/admin/jogos/exportar?arquivo=catalogo.json&conteudo=${encodeURIComponent(body)}`);
 }
 
 /** Prévia da importação: lê o arquivo, mostra o que entra, o que muda e o que está errado. Nada grava aqui. */
