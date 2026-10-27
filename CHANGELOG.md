@@ -3,6 +3,50 @@
 Formato: [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/). Versões seguem
 [SemVer](https://semver.org/lang/pt-BR/).
 
+## [0.2.0] — 2026-10-27
+
+Fecha as pendências das fases 1 a 4 e completa a administração. Nada disso muda a regra de preço: o motor do
+domínio continua sendo o único lugar que decide o menor preço elegível.
+
+### Adicionado
+
+- **Imagens (CAT-005)**: biblioteca por jogo com capa, fundo, logo e capturas; origem e atribuição obrigatórias,
+  `addMediaAsset`/`replacePrimaryImage`/`removeMediaAsset`, galeria na página do jogo e arte de demonstração gerada
+  pelo projeto.
+- **Identificadores externos (CAT-007)**: associar, listar por fonte e remover no cadastro do jogo.
+- **Duplicatas (CAT-008)**: `/admin/duplicatas` com candidatos por título normalizado, impacto antes da união,
+  união transacional (`mergeGames`) e histórico em `game_merges`; o duplicado é arquivado, não apagado.
+- **Matriz de fontes (PAR-004)**: acesso, formato, cobertura em BRL, frequência, documentação, termos, atribuição e
+  situação por fonte; `sourceIsUsable` decide quem alimenta a comparação.
+- **Reprocessamento (OFR-006)**: `@tako/ingest` concentra a persistência da importação; o painel e o worker rodam o
+  mesmo código, o erro resolvido fica marcado com a execução que o resolveu e a linha recusada guarda o conteúdo.
+- **Histórico de preço (EXP-001)**: `summarizeHistory` com cobertura explícita e bloco na página do jogo.
+- **Administração**: `/admin/usuarios` (papel, ativação, revogação de sessão), `/admin/auditoria` filtrável e
+  segundo fator TOTP em `/admin/seguranca` com login em duas etapas.
+- **Produtos**: cadastro de edição, DLC e bundle pelo painel, com publicação.
+- **Operação (OPS-001)**: `/api/health` com 503 quando degrada, `scripts/healthcheck.mjs`, tabela de integrações no
+  painel de qualidade e limites em `docs/monitoracao.md`.
+- **Backup (OPS-002)**: `scripts/backup.sh` e `scripts/restore.sh`, com restauração provada e procedimento em
+  `docs/backup.md`.
+- **Acessibilidade (STO-006)**: `scripts/check-contrast.mjs` (porta do `check.mjs`), link de pular conteúdo, foco
+  visível, `aria-current` e auditoria em `docs/acessibilidade.md`.
+
+### Corrigido
+
+- `redirect()` dentro de `try` fazia o painel exibir `NEXT_REDIRECT` no banner de erro.
+- Timestamps do Postgres chegavam como `Date` e quebravam o histórico de preço no navegador.
+- Reprocessar erros não conta mais como falha da fonte.
+- Credenciais de demonstração só aparecem com `DEMO_CATALOG` ligado.
+
+### Processo
+
+- Feature entra na `develop` por merge commit, nunca squash: os commits pequenos continuam no histórico.
+
+### Notas
+
+- Continua sem integração real de loja (OFR-008/009), licença (WEB-002), proteção de branch (WEB-004) e publicação
+  (OPS-003/004). Ver `docs/estado-do-prd.md`.
+
 ## [0.1.0] — 2026-10-27
 
 Primeira versão funcional da Tako Store, com catálogo fictício e as fases 0 a 3 do PRD.
