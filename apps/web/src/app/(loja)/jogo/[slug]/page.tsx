@@ -1,11 +1,12 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
-import { formatBRL, productLabel, type Game } from "@tako/domain";
+import { listMediaAssets } from "@tako/db";
+import { formatBRL, galleryAssets, historyPeriodLabel, productLabel, type Game } from "@tako/domain";
 import { Fileira } from "@/components/loja/Fileira/Fileira";
 import { Preco } from "@/components/loja/Preco/Preco";
 import { Vazio } from "@/components/loja/Vazio/Vazio";
-import { gameDetail, loadShop, type ShopData } from "@/server/shop";
+import { gameDetail, loadShop, priceHistory, type ShopData } from "@/server/shop";
 import styles from "./page.module.css";
 
 export const dynamic = "force-dynamic";
@@ -48,7 +49,10 @@ export default async function JogoPage({ params }: { params: Promise<{ slug: str
   const { shop, game } = await findGame(slug);
   if (game === null) notFound();
 
+  const [assets, historySummary] = await Promise.all([listMediaAssets(game.id), priceHistory(shop, game.id)]);
   const detail = gameDetail(shop, game);
+  const screenshots = galleryAssets(assets);
+  const gallery = screenshots.length > 0 ? screenshots.map((asset) => asset.url) : game.media.screenshots;
   const bestOverall = detail.products
     .flatMap((product) => (product.best === null ? [] : [product.best]))
     .sort((a, b) => a.offer.priceCents - b.offer.priceCents)[0];
@@ -124,6 +128,19 @@ export default async function JogoPage({ params }: { params: Promise<{ slug: str
           </div>
         </div>
 
+        {gallery.length > 0 && (
+          <section className={styles["gallery"]} aria-label="Imagens do jogo">
+            <h2 className="title">Imagens</h2>
+            <ul className={styles["shots"]}>
+              {gallery.map((url) => (
+                <li key={url}>
+                  <img src={url} alt={`${game.title} — imagem de demonstração`} width={640} height={360} loading="lazy" />
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+
         <section className={styles["offers"]} aria-label="Ofertas">
           <h2 className="title">Ofertas acompanhadas</h2>
           {detail.products.length === 0 && (
@@ -182,6 +199,21 @@ export default async function JogoPage({ params }: { params: Promise<{ slug: str
             é concluída no site da loja.
           </p>
         </section>
+
+        {historySummary !== null && historySummary.observations >= 2 && historySummary.min !== null && (
+          <section className={styles["history"]} aria-label="Histórico de preço">
+            <h2 className="title">Histórico de preço</h2>
+            <p className={styles["historyLine"]}>
+              Menor preço observado: <strong>{formatBRL(historySummary.min.priceCents)}</strong> em{" "}
+              {new Date(historySummary.min.at).toLocaleDateString("pt-BR", { timeZone: "UTC" })},{" "}
+              {historyPeriodLabel(historySummary)} · {historySummary.observations} observação(ões) das lojas acompanhadas.
+            </p>
+            <p className={styles["note"]}>
+              O histórico começa quando a Tako passou a acompanhar a oferta: antes disso não existe preço conhecido para
+              comparar.
+            </p>
+          </section>
+        )}
       </article>
 
       {detail.related.length > 0 && (

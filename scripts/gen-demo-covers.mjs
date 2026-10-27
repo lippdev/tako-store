@@ -1,5 +1,6 @@
-// Gera as capas de demonstração do catálogo: nenhuma arte real, nenhuma dependência externa. Cada capa é um SVG
-// com gradiente próprio e o título, servido de `apps/web/public/covers/`.
+// Gera as capas e as imagens de galeria de demonstração: nenhuma arte real, nenhuma dependência externa. Cada capa
+// é um SVG com gradiente próprio e o título, servido de `apps/web/public/covers/`; as capturas da galeria são
+// paisagens 16:9 marcadas como demonstração, em `apps/web/public/covers/galeria/`.
 //
 //   node scripts/gen-demo-covers.mjs
 
@@ -9,7 +10,8 @@ import { fileURLToPath } from "node:url";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const out = join(root, "apps", "web", "public", "covers");
-mkdirSync(out, { recursive: true });
+const galleryOut = join(out, "galeria");
+mkdirSync(galleryOut, { recursive: true });
 
 const GAMES = [
   ["as-cronicas-de-vela", "As Crônicas de Vela", ["#2a1d4f", "#7a4fa3", "#f0c987"]],
@@ -53,4 +55,28 @@ for (const [slug, title, [from, to, ink]] of GAMES) {
   writeFileSync(join(out, `${slug}.svg`), svg);
 }
 
+// Galeria: duas paisagens por jogo, com o título e o aviso de demonstração no canto.
+for (const [slug, title, [from, to, ink]] of GAMES) {
+  for (const frame of [1, 2]) {
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720" role="img" aria-label="${escape(title)} — imagem de demonstração ${String(frame)}">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="${from}"/>
+      <stop offset="1" stop-color="${to}"/>
+    </linearGradient>
+  </defs>
+  <rect width="1280" height="720" fill="url(#bg)"/>
+  <g fill="none" stroke="${ink}" stroke-opacity="0.35" stroke-width="3">
+    <path d="M-60 ${String(430 + frame * 30)} C 260 ${String(300 + frame * 40)}, 520 ${String(560 + frame * 20)}, 820 ${String(380 + frame * 30)} S 1200 ${String(300 + frame * 40)}, 1340 ${String(420 + frame * 30)}"/>
+    <circle cx="${String(980 - frame * 90)}" cy="${String(200 + frame * 40)}" r="${String(120 + frame * 18)}" fill="${ink}" fill-opacity="0.12"/>
+  </g>
+  <text x="64" y="632" fill="${ink}" font-family="Poppins, system-ui, sans-serif" font-size="44" font-weight="700">${escape(title)}</text>
+  <text x="64" y="674" fill="${ink}" fill-opacity="0.7" font-family="system-ui, sans-serif" font-size="18" letter-spacing="4">IMAGEM DE DEMONSTRAÇÃO ${String(frame)}</text>
+</svg>
+`;
+    writeFileSync(join(galleryOut, `${slug}-${String(frame)}.svg`), svg);
+  }
+}
+
 console.log(`${String(GAMES.length)} capas → apps/web/public/covers/`);
+console.log(`${String(GAMES.length * 2)} imagens de galeria → apps/web/public/covers/galeria/`);

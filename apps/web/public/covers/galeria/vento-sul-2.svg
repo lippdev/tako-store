@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720" role="img" aria-label="Vento Sul — imagem de demonstração 2">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0b3d2e"/>
+      <stop offset="1" stop-color="#3a7d44"/>
+    </linearGradient>
+  </defs>
+  <rect width="1280" height="720" fill="url(#bg)"/>
+  <g fill="none" stroke="#f6f7d7" stroke-opacity="0.35" stroke-width="3">
+    <path d="M-60 490 C 260 380, 520 600, 820 440 S 1200 380, 1340 480"/>
+    <circle cx="800" cy="280" r="156" fill="#f6f7d7" fill-opacity="0.12"/>
+  </g>
+  <text x="64" y="632" fill="#f6f7d7" font-family="Poppins, system-ui, sans-serif" font-size="44" font-weight="700">Vento Sul</text>
+  <text x="64" y="674" fill="#f6f7d7" fill-opacity="0.7" font-family="system-ui, sans-serif" font-size="18" letter-spacing="4">IMAGEM DE DEMONSTRAÇÃO 2</text>
+</svg>

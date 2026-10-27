@@ -3,6 +3,7 @@ import "server-only";
 import {
   type HomeSection,
   listOffersForProducts,
+  listPriceHistoryForProducts,
   listProducts,
   listPublishedGames,
   listSources,
@@ -11,11 +12,13 @@ import {
 import {
   cheapestOffer,
   discountPercent,
+  type HistorySummary,
   matchesSearch,
   rankOffers,
   searchScore,
   selectSectionGames,
   sortCatalog,
+  summarizeHistory,
   type ActivationPlatform,
   type CatalogCandidate,
   type CatalogOrder,
@@ -90,6 +93,19 @@ export async function loadShop(now = new Date()): Promise<ShopData> {
   }
 
   return { games, products, stores, sources, offerings: offers, offersByProduct, context, bestByProduct };
+}
+
+/**
+ * Histórico de preço do jogo (EXP-001, PRD §10.6), calculado só com o que foi observado. Fica fora do componente
+ * para a leitura do relógio não virar render impuro.
+ */
+export async function priceHistory(data: ShopData, gameId: string, windowDays = 90): Promise<HistorySummary | null> {
+  const products = data.products.filter((product) => product.gameId === gameId);
+  const base = products.find((product) => product.kind === "base") ?? products[0];
+  if (base === undefined) return null;
+  const since = new Date(Date.now() - windowDays * 86_400_000);
+  const history = await listPriceHistoryForProducts([base.id], since);
+  return summarizeHistory(history.get(base.id) ?? [], { windowDays, now: new Date() });
 }
 
 /** Produto que representa o jogo na vitrine: o base, ou o primeiro publicado. */

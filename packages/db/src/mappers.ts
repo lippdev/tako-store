@@ -2,6 +2,12 @@
 
 import type { Availability, Game, Offer, OperatingSystem, PartnerStatus, Product, ProductKind, Source, Store } from "@tako/domain";
 
+/** Timestamp do Postgres chega como `Date`; a fronteira do banco entrega sempre ISO 8601 em texto. */
+export function toIso(value: Date | string | null): string | null {
+  if (value === null) return null;
+  return value instanceof Date ? value.toISOString() : new Date(value).toISOString();
+}
+
 export interface GameRow {
   id: string;
   slug: string;
@@ -46,6 +52,7 @@ export function toGame(row: GameRow): Game {
       screenshots: row.screenshots,
     },
     published: row.published,
+    archived: row.archived,
     createdAt: row.created_at.toISOString(),
     updatedAt: row.updated_at.toISOString(),
   };
@@ -113,6 +120,16 @@ export interface SourceRow {
   regions: string[];
   currencies: string[];
   notes: string | null;
+  access: Source["access"];
+  format: Source["format"];
+  covers_brl: boolean;
+  cadence_hours: number | null;
+  docs_url: string | null;
+  terms_url: string | null;
+  attribution: string | null;
+  status: Source["status"];
+  last_run_at: Date | null;
+  consecutive_failures: number;
 }
 
 export function toSource(row: SourceRow): Source {
@@ -126,6 +143,16 @@ export function toSource(row: SourceRow): Source {
     regions: row.regions,
     currencies: row.currencies,
     notes: row.notes,
+    access: row.access,
+    format: row.format,
+    coversBrl: row.covers_brl,
+    cadenceHours: row.cadence_hours,
+    docsUrl: row.docs_url,
+    termsUrl: row.terms_url,
+    attribution: row.attribution,
+    status: row.status,
+    lastRunAt: toIso(row.last_run_at),
+    consecutiveFailures: row.consecutive_failures,
   };
 }
 
