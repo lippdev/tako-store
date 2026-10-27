@@ -1,0 +1,49 @@
+.wrapper {
+  position: relative;
+  flex-shrink: 0;
+}
+.list {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 30;
+  width: 340px;
+  margin: 0;
+  padding: 6px;
+  list-style: none;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-card);
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-float);
+}
+.list button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px;
+  border: 0;
+  border-radius: var(--radius-row);
+  background: none;
+  color: var(--text);
+  font-family: var(--font-text);
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+.list button:hover,
+.list .active {
+  background: var(--glass-hover);
+}
+.list img {
+  border-radius: 4px;
+  object-fit: cover;
+}
+.list span:nth-of-type(1) {
+  flex: 1;
+}
+.price {
+  color: var(--text-muted);
+  font-size: 12px;
+  white-space: nowrap;
+}

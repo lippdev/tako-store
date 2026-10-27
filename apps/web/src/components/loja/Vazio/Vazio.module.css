@@ -1,0 +1,16 @@
+.empty {
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+  padding: 64px 24px;
+  text-align: center;
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--radius-card);
+  color: var(--text-muted);
+}
+.empty p {
+  margin: 0;
+}
+.empty .title {
+  color: var(--text);
+}
