@@ -15,6 +15,7 @@ import {
   getGameById,
   getSourceBySlug,
   getStoreBySlug,
+  listAllGames,
   listMediaAssets,
   mergeGames,
   removeExternalIdentifier,
@@ -29,6 +30,7 @@ import {
   setSourceEnabled,
   updateGame,
   updateSourceMatrix,
+  applyCatalogImport,
   upsertBanner,
   upsertGame,
   upsertProduct,
@@ -52,8 +54,10 @@ import {
   isAffiliateParam,
   isMediaKind,
   normalizeDomain,
+  parseCatalogFile,
   parseMediaUrl,
   redactUrl,
+  serializeCatalogFile,
   slugify,
   templateDomain,
   type HomeRule,
@@ -717,4 +721,42 @@ export async function salvarFonte(form: FormData): Promise<void> {
     detail: { slug, feed: feedUrl === null ? null : redactUrl(feedUrl) },
   });
   redirect("/admin/fontes?ok=fonte");
+}
+
+/** Catálogo em arquivo (PRD §12.2): exportar o que existe agora. */
+export async function exportarCatalogo(): Promise<void> {
+  const user = await requirePermission("games:write");
+  const games = await listAllGames();
+  await writeAudit({ actor: user, action: "catalogo:exportar", entity: "game", entityId: null, detail: { jogos: games.length } });
+  const body = serializeCatalogFile(games, new Date());
+  redirect(`/admin/jogos/exportar?arquivo=catalogo.json&conteudo=${encodeURIComponent(body)}`);
+}
+
+/** Prévia da importação: lê o arquivo, mostra o que entra, o que muda e o que está errado. Nada grava aqui. */
+export async function preverImportacaoCatalogo(form: FormData): Promise<void> {
+  await requirePermission("games:write");
+  const file = form.get("arquivo");
+  if (!(file instanceof File) || file.size === 0) redirect("/admin/jogos?erro=arquivo");
+  if (file.size > 5_000_000) redirect("/admin/jogos?erro=arquivo-grande");
+  const conteudo = await file.text();
+  const target = new URLSearchParams({ arquivo: file.name, conteudo });
+  redirect(`/admin/jogos/importar?${target.toString()}`);
+}
+
+/** Confirma a prévia: grava tudo em uma transação, ou nada. */
+export async function confirmarImportacaoCatalogo(form: FormData): Promise<void> {
+  const user = await requirePermission("games:write");
+  const conteudo = text(form, "conteudo");
+  if (conteudo === "") redirect("/admin/jogos?erro=arquivo");
+  const { entries, issues } = parseCatalogFile(conteudo);
+  if (issues.length > 0 || entries.length === 0) redirect("/admin/jogos?erro=arquivo-invalido");
+  const result = await applyCatalogImport(entries);
+  await writeAudit({
+    actor: user,
+    action: "catalogo:importar",
+    entity: "game",
+    entityId: null,
+    detail: { jogos: result.applied.length, recusados: result.failed.length },
+  });
+  redirect(`/admin/jogos?ok=importado&jogos=${String(result.applied.length)}`);
 }
