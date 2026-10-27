@@ -432,7 +432,7 @@ async function main(): Promise<void> {
     const store = storeByName.get(item.store);
     const source = sourceByName.get(item.source);
     if (productId === undefined || store === undefined || source === undefined) continue;
-    await upsertOffer({
+    const savedOffer = await upsertOffer({
       productId,
       storeId: store.id,
       sourceId: source.id,
@@ -447,6 +447,22 @@ async function main(): Promise<void> {
       observedAt: hoursAgo(item.observedHoursAgo ?? 1),
     });
     written += 1;
+
+    // Histórico de demonstração (EXP-001): observações anteriores, mais caras, para a página do jogo poder falar do
+    // preço observado no período com a cobertura declarada. Nada disso é preço real.
+    await query(
+      `insert into price_observations (offer_id, source_id, price_cents, reference_price_cents, availability, observed_at)
+       values ($1, $2, $3, $4, 'available', $5), ($1, $2, $6, $4, 'available', $7)`,
+      [
+        savedOffer.id,
+        source.id,
+        Math.round(item.price * 1.18),
+        item.reference ?? null,
+        hoursAgo(55 * 24),
+        Math.round(item.price * 1.05),
+        hoursAgo(20 * 24),
+      ],
+    );
   }
 
   // Home de demonstração: banners e seções, uma de cada tipo de regra.

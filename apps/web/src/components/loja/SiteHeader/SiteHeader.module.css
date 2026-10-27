@@ -20,27 +20,9 @@
   align-items: center;
   flex-shrink: 0;
 }
-.nav {
-  display: flex;
-  gap: 20px;
-  flex: 1;
-}
-.nav a {
-  color: var(--text-muted);
-  font-family: var(--font-text);
-  font-size: 13.5px;
-  text-decoration: none;
-  padding: 6px 0;
-}
-.nav a:hover {
-  color: var(--text);
-}
 @media (max-width: 720px) {
   .inner {
     gap: 16px;
     padding: 0 16px;
-  }
-  .nav {
-    display: none;
   }
 }

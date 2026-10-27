@@ -7,8 +7,13 @@ import styles from "./layout.module.css";
 export default function LojaLayout({ children }: { children: ReactNode }) {
   return (
     <div className={styles["shell"]}>
+      <a className={styles["skip"]} href="#conteudo">
+        Ir para o conteúdo
+      </a>
       <SiteHeader />
-      <main className={styles["main"]}>{children}</main>
+      <main id="conteudo" className={styles["main"]} tabIndex={-1}>
+        {children}
+      </main>
       <footer className={styles["footer"]}>
         <div className={styles["footerInner"]}>
           <p>

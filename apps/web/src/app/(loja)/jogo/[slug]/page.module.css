@@ -198,3 +198,33 @@
     grid-column: 1 / -1;
   }
 }
+
+.gallery {
+  margin-top: 32px;
+}
+.shots {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 12px;
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.shots img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  background: var(--surface-raised);
+}
+.history {
+  margin-top: 32px;
+}
+.historyLine {
+  margin: 8px 0 6px;
+  color: var(--text);
+  font-family: var(--font-text);
+  font-size: 15px;
+  line-height: 1.6;
+}

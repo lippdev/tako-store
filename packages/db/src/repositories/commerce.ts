@@ -281,6 +281,29 @@ export async function getOfferById(id: string): Promise<Offer | null> {
   return row === null ? null : toOffer(row);
 }
 
+/** Observações de preço por produto (PRD §10.6, EXP-001): o histórico que a tela pode mostrar com cobertura. */
+export async function listPriceHistoryForProducts(
+  productIds: readonly string[],
+  since: Date,
+): Promise<Map<string, { productId: string; priceCents: number; observedAt: string; sourceId: string }[]>> {
+  if (productIds.length === 0) return new Map();
+  const rows = await query<{ productId: string; priceCents: number; observedAt: string; sourceId: string }>(
+    `select o.product_id as "productId", po.price_cents::int as "priceCents",
+            po.observed_at as "observedAt", po.source_id as "sourceId"
+     from price_observations po join offers o on o.id = po.offer_id
+     where o.product_id = any($1::uuid[]) and po.observed_at >= $2
+     order by po.observed_at`,
+    [productIds, since],
+  );
+  const byProduct = new Map<string, { productId: string; priceCents: number; observedAt: string; sourceId: string }[]>();
+  for (const row of rows) {
+    const list = byProduct.get(row.productId) ?? [];
+    list.push(row);
+    byProduct.set(row.productId, list);
+  }
+  return byProduct;
+}
+
 export async function recordOfferClick(offerId: string): Promise<void> {
   await query("insert into offer_clicks (offer_id) values ($1)", [offerId]);
 }
