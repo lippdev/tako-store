@@ -24,6 +24,7 @@ const REQUIRED = [
   "docs/backup.md",
   "docs/monitoracao.md",
   "docs/integracoes.md",
+  "docs/privacidade.md",
   "apps/web/package.json",
   "apps/worker/package.json",
   "packages/domain/src/index.ts",

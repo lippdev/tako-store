@@ -6,12 +6,14 @@
 //   npm run worker -- retry --run <id da execução>
 //   npm run worker -- due                 # uma passada pelas fontes com coleta devida
 //   npm run worker -- daemon [--interval 60]
+//   npm run worker -- retain              # apaga tentativa, clique e log fora do prazo
 //
 // O agendador respeita `cadence_hours` de cada fonte: coleta a que está devida, registra a execução e volta a dormir.
 // Ele não substitui um supervisor de processo (systemd, container restart), só dispensa um cron por fonte.
 
 import { connectorFor } from "@tako/connectors";
 import {
+  applyRetention,
   closePool,
   getSourceBySlug,
   listDueSources,
@@ -87,8 +89,16 @@ async function importOne(slug: string, file: string | undefined): Promise<void> 
   printSummary(summary);
 }
 
+async function retain(): Promise<void> {
+  const result = await applyRetention();
+  console.log(
+    `Retenção: ${String(result.loginAttempts)} tentativa(s), ${String(result.clicks)} clique(s), ${String(result.resolvedErrors)} erro(s) resolvido(s), ${String(result.auditEvents)} auditoria(s).`,
+  );
+}
+
 /** Uma passada: cada fonte devida é coletada uma vez, em série; falha de uma não impede as outras. */
 async function runDue(): Promise<number> {
+  await retain();
   const due = (await listDueSources()).filter(sourceCanCollect);
   if (due.length === 0) {
     console.log("Nenhuma fonte com coleta devida agora.");
@@ -149,6 +159,9 @@ async function main(): Promise<void> {
       if (args.run === undefined) throw new Error("informe a execução com --run <id>");
       await retryRun(args.run);
       return;
+    case "retain":
+      await retain();
+      return;
     case "due": {
       const failures = await runDue();
       if (failures > 0) process.exitCode = 1;
@@ -159,7 +172,7 @@ async function main(): Promise<void> {
       return;
     default:
       console.log(
-        "Uso:\n  npm run worker -- sources\n  npm run worker -- runs [--limit 10]\n  npm run worker -- import --source <slug> [--file <arquivo>]\n  npm run worker -- retry --run <id>\n  npm run worker -- due\n  npm run worker -- daemon [--interval 60] [--once]",
+        "Uso:\n  npm run worker -- sources\n  npm run worker -- runs [--limit 10]\n  npm run worker -- import --source <slug> [--file <arquivo>]\n  npm run worker -- retry --run <id>\n  npm run worker -- due\n  npm run worker -- daemon [--interval 60] [--once]\n  npm run worker -- retain",
       );
   }
 }
