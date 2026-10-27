@@ -110,9 +110,9 @@ export default async function FontesPage({
                         </button>
                       </form>
                       <form action={executarImportacao}>
-                        <input type="hidden" name="id" value={source.id} />
+                        <input type="hidden" name="slug" value={source.slug} />
                         <button type="submit" className={styles["secondary"]}>
-                          Executar
+                          Executar agora
                         </button>
                       </form>
                     </div>

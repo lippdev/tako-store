@@ -106,6 +106,18 @@ npm test                 # domínio, banco (precisa do Postgres), conectores e i
 npm run build            # build de produção do Next
 ```
 
+## Deploy
+
+`deploy/` traz o que não depende de código para subir: unidades systemd para a loja e para o worker (`daemon`) e um
+`env.example` com as variáveis esperadas. O arquivo de ambiente real fica fora do repositório, em
+`/etc/tako-store/env`, com permissão 0600.
+
+```bash
+npm ci && npm run build
+sudo cp deploy/systemd/tako-*.service /etc/systemd/system/
+sudo systemctl daemon-reload && sudo systemctl enable --now tako-web tako-worker
+```
+
 ## Design system
 
 O visual vem de [`design/desktop/`](design/desktop/), cópia do launcher. O app consome uma versão gerada — tokens,

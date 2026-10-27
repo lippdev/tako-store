@@ -1,0 +1,19 @@
+# Coleta e importação contínuas. O agendador respeita a cadência de cada fonte (sources.cadence_hours).
+#   sudo systemctl daemon-reload && sudo systemctl enable --now tako-worker
+[Unit]
+Description=Tako Store — worker de coleta e importação
+After=network.target postgresql.service
+
+[Service]
+Type=simple
+User=tako
+WorkingDirectory=/srv/tako-store
+EnvironmentFile=/etc/tako-store/env
+ExecStart=/usr/bin/npm run worker -- daemon --interval 60
+Restart=always
+RestartSec=10
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

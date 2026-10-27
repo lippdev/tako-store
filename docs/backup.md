@@ -9,6 +9,12 @@ O procedimento, os comandos e o que foi medido na última prova.
 | `scripts/backup.sh` | `pg_dump` no formato custom, com data no nome, em `backups/`. |
 | `scripts/restore.sh` | Cria um banco de destino (padrão `<banco>_restore`) e restaura o dump nele. |
 
+Retenção: `--keep N` apaga os dumps mais antigos do diretório de destino, mantendo os N mais recentes.
+
+```bash
+PGPASSWORD=… ./scripts/backup.sh --out /var/backups/tako/tako-store-$(date +%F).dump --keep 14
+```
+
 O dump é formato custom (`-Fc`) porque permite `pg_restore --list`, restauração parcial e `--clean`. O `--no-owner`
 e o `--no-privileges` deixam o dump independente de nome de papel, para restaurar em outra máquina sem surpresa.
 
@@ -55,8 +61,8 @@ $ psql -d tako_store_restore   -Atc "…"
 
 ## O que ainda falta para produção
 
-- Rotina automática (cron do provedor ou serviço gerenciado) e retenção definida — a decisão de onde guardar o dump e
-  por quanto tempo é de infraestrutura, não deste repositório.
+- Rotina automática (cron do provedor ou serviço gerenciado): o script está pronto para rodar em cron, com `--keep`
+  para retenção; onde guardar o dump é decisão de infraestrutura.
 - Backup de ponto no tempo (PITR) só existe em banco gerenciado com WAL arquivado; aqui a prova é o dump lógico.
 - Ensaio de restauração periódico: restaurar e abrir a loja contra o banco restaurado. Sem ensaio, o backup é uma
   esperança.
