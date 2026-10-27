@@ -4,6 +4,7 @@
 import { createHash, randomBytes, scrypt as scryptCallback, timingSafeEqual } from "node:crypto";
 import { promisify } from "node:util";
 import { query, queryOne } from "./pool";
+import { verifyTotp } from "./totp";
 
 const scrypt = promisify(scryptCallback);
 
@@ -33,6 +34,8 @@ export interface AdminUser {
   name: string;
   role: Role;
   active: boolean;
+  /** Segundo fator ativo: o login pede o código TOTP depois da senha. */
+  mfaEnabled: boolean;
 }
 
 export interface AdminRow {
@@ -42,6 +45,7 @@ export interface AdminRow {
   role: Role;
   active: boolean;
   password_hash: string;
+  mfa_enabled: boolean;
 }
 
 const SESSION_HOURS = 12;
@@ -75,7 +79,7 @@ export async function createAdminUser(input: {
   const row = await queryOne<AdminRow>(
     `insert into admin_users (email, name, password_hash, role) values ($1, $2, $3, $4)
      on conflict (email) do update set name = excluded.name, password_hash = excluded.password_hash, role = excluded.role
-     returning id, email, name, role, active, password_hash`,
+     returning id, email, name, role, active, password_hash, mfa_enabled`,
     [input.email.toLowerCase(), input.name, passwordHash, input.role],
   );
   if (row === null) throw new Error("usuário administrativo não foi gravado");
@@ -83,13 +87,20 @@ export async function createAdminUser(input: {
 }
 
 function toUser(row: AdminRow): AdminUser {
-  return { id: row.id, email: row.email, name: row.name, role: row.role, active: row.active };
+  return {
+    id: row.id,
+    email: row.email,
+    name: row.name,
+    role: row.role,
+    active: row.active,
+    mfaEnabled: row.mfa_enabled,
+  };
 }
 
 /** Confere e-mail e senha. Devolve `null` em qualquer falha, sem dizer qual campo errou. */
 export async function authenticate(email: string, password: string): Promise<AdminUser | null> {
   const row = await queryOne<AdminRow>(
-    "select id, email, name, role, active, password_hash from admin_users where email = $1 and active",
+    "select id, email, name, role, active, password_hash, mfa_enabled from admin_users where email = $1 and active",
     [email.toLowerCase()],
   );
   if (row === null) return null;
@@ -115,7 +126,7 @@ export async function createSession(userId: string): Promise<{ token: string; ex
 export async function sessionUser(token: string): Promise<AdminUser | null> {
   if (token === "") return null;
   const row = await queryOne<AdminRow>(
-    `select u.id, u.email, u.name, u.role, u.active, u.password_hash
+    `select u.id, u.email, u.name, u.role, u.active, u.password_hash, u.mfa_enabled
      from admin_sessions s join admin_users u on u.id = s.user_id
      where s.token_hash = $1 and s.revoked_at is null and s.expires_at > now() and u.active`,
     [hashToken(token)],
@@ -151,12 +162,138 @@ export async function writeAudit(input: {
   );
 }
 
-export async function listAudit(limit = 50): Promise<
-  { id: string; actorEmail: string; action: string; entity: string; entityId: string | null; createdAt: string }[]
-> {
-  return query(
-    `select id::text, actor_email as "actorEmail", action, entity, entity_id as "entityId", created_at as "createdAt"
+export interface AdminUserRow {
+  id: string;
+  email: string;
+  name: string;
+  role: Role;
+  active: boolean;
+  lastLoginAt: string | null;
+  sessions: number;
+}
+
+/** Usuários do painel com sessões ativas — a tela de administração (PRD §12.1). */
+export async function listAdminUsers(): Promise<AdminUserRow[]> {
+  return query<AdminUserRow>(
+    `select u.id, u.email, u.name, u.role, u.active, u.last_login_at as "lastLoginAt",
+            (select count(*)::int from admin_sessions s
+              where s.user_id = u.id and s.revoked_at is null and s.expires_at > now()) as sessions
+     from admin_users u order by u.active desc, u.name`,
+  );
+}
+
+export async function setAdminUserActive(id: string, active: boolean): Promise<void> {
+  await query("update admin_users set active = $2 where id = $1", [id, active]);
+  if (!active) await revokeUserSessions(id);
+}
+
+export async function setAdminUserRole(id: string, role: Role): Promise<void> {
+  await query("update admin_users set role = $2 where id = $1", [id, role]);
+}
+
+/** Revoga todas as sessões do usuário: o próximo acesso pede senha de novo. */
+export async function revokeUserSessions(userId: string): Promise<number> {
+  const rows = await query<{ id: string }>(
+    "update admin_sessions set revoked_at = now() where user_id = $1 and revoked_at is null returning id",
+    [userId],
+  );
+  return rows.length;
+}
+
+export async function countAdminUsers(): Promise<number> {
+  const row = await queryOne<{ total: number }>("select count(*)::int as total from admin_users where active");
+  return row?.total ?? 0;
+}
+
+export interface AuditRecord {
+  id: string;
+  actorEmail: string;
+  action: string;
+  entity: string;
+  entityId: string | null;
+  detail: unknown;
+  createdAt: string;
+}
+
+export async function listAudit(limit = 50): Promise<AuditRecord[]> {
+  const rows = await query<Omit<AuditRecord, "createdAt"> & { createdAt: Date }>(
+    `select id::text, actor_email as "actorEmail", action, entity, entity_id as "entityId", detail,
+            created_at as "createdAt"
      from audit_events order by created_at desc limit $1`,
     [limit],
   );
+  return rows.map((row) => ({ ...row, createdAt: row.createdAt.toISOString() }));
+}
+
+// ——— Segundo fator (PRD §12.1) ———
+
+export interface MfaState {
+  enabled: boolean;
+  /** Segredo em inscrição (ainda não confirmado) ou já ativo. Nunca sai do servidor para a tela. */
+  secret: string | null;
+}
+
+export async function mfaState(userId: string): Promise<MfaState | null> {
+  const row = await queryOne<{ mfa_enabled: boolean; mfa_secret: string | null }>(
+    "select mfa_enabled, mfa_secret from admin_users where id = $1",
+    [userId],
+  );
+  return row === null ? null : { enabled: row.mfa_enabled, secret: row.mfa_secret };
+}
+
+/** Guarda o segredo em inscrição; só `enableMfa` liga o segundo fator. */
+export async function storeMfaSecret(userId: string, secret: string): Promise<void> {
+  await query("update admin_users set mfa_secret = $2, mfa_enabled = false where id = $1", [userId, secret]);
+}
+
+export async function enableMfa(userId: string): Promise<void> {
+  await query("update admin_users set mfa_enabled = true where id = $1 and mfa_secret is not null", [userId]);
+}
+
+export async function disableMfa(userId: string): Promise<void> {
+  await query("update admin_users set mfa_enabled = false, mfa_secret = null where id = $1", [userId]);
+}
+
+/** Pedido de código: token em claro vai para o cookie, hash fica no banco por 5 minutos. */
+export async function createMfaPending(userId: string): Promise<string> {
+  const token = randomBytes(32).toString("base64url");
+  await query(
+    `insert into admin_mfa_pending (token_hash, user_id, expires_at) values ($1, $2, now() + interval '5 minutes')`,
+    [hashToken(token), userId],
+  );
+  return token;
+}
+
+export async function consumeMfaPending(token: string): Promise<{ userId: string; email: string } | null> {
+  const row = await queryOne<{ userId: string; email: string }>(
+    `update admin_mfa_pending p set expires_at = now()
+     from admin_users u
+     where p.token_hash = $1 and p.user_id = u.id and p.expires_at > now()
+     returning p.user_id as "userId", u.email as email`,
+    [hashToken(token)],
+  );
+  return row;
+}
+
+export async function findMfaPending(token: string): Promise<{ userId: string; email: string } | null> {
+  return queryOne(
+    `select p.user_id as "userId", u.email as email
+     from admin_mfa_pending p join admin_users u on u.id = p.user_id
+     where p.token_hash = $1 and p.expires_at > now()`,
+    [hashToken(token)],
+  );
+}
+
+export async function clearMfaPending(token: string): Promise<void> {
+  await query("delete from admin_mfa_pending where token_hash = $1", [hashToken(token)]);
+}
+
+/** Confere o código TOTP do usuário; devolve `false` quando não há segundo fator ativo. */
+export async function verifyUserTotp(userId: string, code: string): Promise<boolean> {
+  const row = await queryOne<{ mfa_secret: string | null; mfa_enabled: boolean }>(
+    "select mfa_secret, mfa_enabled from admin_users where id = $1 and active",
+    [userId],
+  );
+  if (row === null || !row.mfa_enabled || row.mfa_secret === null) return false;
+  return verifyTotp(row.mfa_secret, code);
 }

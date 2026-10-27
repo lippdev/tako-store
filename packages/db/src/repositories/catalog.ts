@@ -207,23 +207,35 @@ export async function setExternalIdentifier(gameId: string, sourceId: string, ex
   );
 }
 
-export async function listExternalIdentifiers(gameId: string): Promise<{ sourceId: string; externalId: string }[]> {
-  return query<{ sourceId: string; externalId: string }>(
-    "select source_id as \"sourceId\", external_id as \"externalId\" from external_identifiers where game_id = $1",
+/** Remove o identificador da fonte para o jogo (CAT-007). */
+export async function removeExternalIdentifier(gameId: string, sourceId: string): Promise<void> {
+  await query("delete from external_identifiers where game_id = $1 and source_id = $2", [gameId, sourceId]);
+}
+
+/** Identificadores com o nome da fonte, para o painel mostrar de onde veio cada ID. */
+export async function listExternalIdentifiersDetailed(
+  gameId: string,
+): Promise<{ sourceId: string; sourceName: string; sourceSlug: string; externalId: string }[]> {
+  return query(
+    `select e.source_id as "sourceId", s.name as "sourceName", s.slug as "sourceSlug", e.external_id as "externalId"
+     from external_identifiers e join sources s on s.id = e.source_id
+     where e.game_id = $1 order by s.name`,
     [gameId],
   );
 }
 
-/** Imagem com a origem registrada (CAT-005). */
-export async function addMediaAsset(input: {
-  gameId: string;
-  kind: "cover" | "hero" | "logo" | "screenshot";
-  url: string;
-  origin: string;
-  attribution?: string | null;
-}): Promise<void> {
-  await query(
-    `insert into media_assets (game_id, kind, url, origin, attribution) values ($1, $2, $3, $4, $5)`,
-    [input.gameId, input.kind, input.url, input.origin, input.attribution ?? null],
+/**
+ * Aponta a imagem principal do jogo (capa, fundo ou logo). `null` limpa o campo — diferente do `updateGame`, que
+ * só troca o que recebe valor.
+ */
+export async function setPrimaryMedia(gameId: string, kind: "cover" | "hero" | "logo", url: string | null): Promise<void> {
+  const column = kind === "cover" ? "cover_url" : kind === "hero" ? "hero_url" : "logo_url";
+  await query(`update games set ${column} = $2, updated_at = now() where id = $1`, [gameId, url]);
+}
+
+export async function listExternalIdentifiers(gameId: string): Promise<{ sourceId: string; externalId: string }[]> {
+  return query<{ sourceId: string; externalId: string }>(
+    "select source_id as \"sourceId\", external_id as \"externalId\" from external_identifiers where game_id = $1",
+    [gameId],
   );
 }

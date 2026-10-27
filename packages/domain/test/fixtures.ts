@@ -31,6 +31,16 @@ export function source(overrides: Partial<Source> = {}): Source {
     regions: ["BR"],
     currencies: ["BRL"],
     notes: null,
+    access: "api",
+    format: "json",
+    coversBrl: true,
+    cadenceHours: 24,
+    docsUrl: null,
+    termsUrl: null,
+    attribution: null,
+    status: "approved",
+    lastRunAt: null,
+    consecutiveFailures: 0,
     ...overrides,
   };
 }

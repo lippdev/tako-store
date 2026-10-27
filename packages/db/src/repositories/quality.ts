@@ -3,6 +3,7 @@
 
 import { isAllowedRedirect } from "@tako/domain";
 import { query } from "../pool";
+import { toIso } from "../mappers";
 
 export interface QualityIssue {
   kind: string;
@@ -112,4 +113,51 @@ export async function qualityIssues(now = new Date()): Promise<QualityIssue[]> {
   });
 
   return issues;
+}
+
+export interface IntegrationHealth {
+  database: "ok" | "down";
+  sources: { slug: string; name: string; enabled: boolean; lastRunAt: string | null; consecutiveFailures: number; openErrors: number }[];
+  staleOffers: number;
+  openErrors: number;
+  failingSources: number;
+  lastSuccessfulRun: string | null;
+}
+
+/**
+ * Saúde da operação (OPS-001): falha de integração e oferta vencida precisam ter nome e número, não um "está tudo
+ * bem" genérico. É o que o /api/health publica e o que o monitor externo consulta.
+ */
+export async function integrationHealth(now = new Date()): Promise<IntegrationHealth> {
+  const rows = await query<{
+    lastRunAt: Date | null;
+    slug: string;
+    name: string;
+    enabled: boolean;
+    consecutiveFailures: number;
+    openErrors: number;
+  }>(
+    `select s.slug, s.name, s.enabled, s.last_run_at as "lastRunAt", s.consecutive_failures as "consecutiveFailures",
+            (select count(*)::int from ingestion_errors e join ingestion_runs r on r.id = e.run_id
+              where r.source_id = s.id and e.resolved_at is null) as "openErrors"
+     from sources s where s.status = 'approved' order by s.name`,
+  );
+  const sources = rows.map((row) => ({ ...row, lastRunAt: toIso(row.lastRunAt) }));
+  const totals = await query<{ staleOffers: number; openErrors: number; lastSuccess: Date | null }>(
+    `select
+       (select count(*)::int from offers o join sources s on s.id = o.source_id
+         where o.observed_at < $1::timestamptz - make_interval(hours => s.max_age_hours)) as "staleOffers",
+       (select count(*)::int from ingestion_errors where resolved_at is null) as "openErrors",
+       (select max(finished_at)::text from ingestion_runs where status = 'success') as "lastSuccess"`,
+    [now],
+  );
+  const row = totals[0];
+  return {
+    database: "ok",
+    sources,
+    staleOffers: row?.staleOffers ?? 0,
+    openErrors: row?.openErrors ?? 0,
+    failingSources: sources.filter((source) => source.consecutiveFailures > 0).length,
+    lastSuccessfulRun: toIso(row?.lastSuccess ?? null),
+  };
 }

@@ -18,7 +18,8 @@ export default async function PainelPage({ searchParams }: { searchParams: Promi
     listIngestionRuns(5),
   ]);
 
-  const published = games.filter((game) => game.published).length;
+  const active = games.filter((game) => !game.archived);
+  const published = active.filter((game) => game.published).length;
   const failing = sources.filter((source) => !source.enabled).length;
 
   return (
@@ -38,7 +39,7 @@ export default async function PainelPage({ searchParams }: { searchParams: Promi
         </div>
         <div className={styles["stat"]}>
           <span>Jogos no catálogo</span>
-          <strong>{games.length}</strong>
+          <strong>{active.length}</strong>
         </div>
         <div className={styles["stat"]}>
           <span>Produtos</span>

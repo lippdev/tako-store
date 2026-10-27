@@ -3,6 +3,7 @@
 // recria o banco; use só em desenvolvimento.
 
 import {
+  addMediaAsset,
   closePool,
   createAdminUser,
   migrate,
@@ -68,6 +69,12 @@ async function main(): Promise<void> {
     kind: "file",
     maxAgeHours: 24,
     notes: "Exportação estruturada fictícia, usada nos testes de importação.",
+    access: "api",
+    format: "csv",
+    coversBrl: true,
+    cadenceHours: 24,
+    status: "approved",
+    attribution: "Dados fictícios gerados pelo próprio projeto.",
   });
   const demoFeed = await upsertSource({
     slug: "feed-demo",
@@ -75,6 +82,12 @@ async function main(): Promise<void> {
     kind: "feed",
     maxAgeHours: 6,
     notes: "Feed fictício com atualização mais frequente.",
+    access: "partner-feed",
+    format: "json",
+    coversBrl: true,
+    cadenceHours: 6,
+    status: "approved",
+    attribution: "Dados fictícios gerados pelo próprio projeto.",
   });
   await upsertSource({
     slug: "fonte-pausada",
@@ -83,6 +96,43 @@ async function main(): Promise<void> {
     enabled: false,
     maxAgeHours: 48,
     notes: "Fonte desligada de propósito: as ofertas dela não aparecem na loja.",
+    access: "api",
+    format: "json",
+    coversBrl: true,
+    cadenceHours: 48,
+    status: "approved",
+  });
+
+  // Matriz de fontes (PAR-004): candidatas em avaliação. São registros fictícios, nomeados como exemplo — não
+  // representam acesso real a nenhum parceiro.
+  await upsertSource({
+    slug: "candidata-pagina-exemplo",
+    name: "Página pública (exemplo fictício)",
+    kind: "page",
+    enabled: false,
+    maxAgeHours: 24,
+    notes: "Exemplo de candidata: só preço à vista na página, sem API. Avaliar termos antes de qualquer coleta.",
+    access: "public-page",
+    format: "html",
+    coversBrl: false,
+    cadenceHours: 24,
+    status: "evaluating",
+  });
+  await upsertSource({
+    slug: "candidata-feed-exemplo",
+    name: "Feed de parceiro (exemplo fictício)",
+    kind: "feed",
+    enabled: false,
+    maxAgeHours: 12,
+    notes: "Exemplo de candidata com feed documentado e cobertura em BRL; falta contrato assinado.",
+    access: "partner-feed",
+    format: "xml",
+    coversBrl: true,
+    cadenceHours: 12,
+    docsUrl: "https://exemplo.invalid/feed/documentacao",
+    termsUrl: "https://exemplo.invalid/termos",
+    attribution: "Preços cedidos pelo parceiro de exemplo.",
+    status: "candidate",
   });
 
   const games = [
@@ -239,6 +289,24 @@ async function main(): Promise<void> {
       published: true,
     });
     saved.set(game.slug, row.id);
+
+    // Biblioteca de imagens (CAT-005): cada imagem com a procedência registrada.
+    await addMediaAsset({
+      gameId: row.id,
+      kind: "cover",
+      url: `/covers/${game.slug}.svg`,
+      origin: "Arte de demonstração gerada pelo projeto",
+      attribution: "Tako Store — catálogo de demonstração",
+    });
+    for (const frame of [1, 2]) {
+      await addMediaAsset({
+        gameId: row.id,
+        kind: "screenshot",
+        url: `/covers/galeria/${game.slug}-${String(frame)}.svg`,
+        origin: "Arte de demonstração gerada pelo projeto",
+        attribution: "Tako Store — catálogo de demonstração",
+      });
+    }
   }
 
   // Produtos: base para todos; edição, DLC e bundle em alguns, para exercitar as regras de comparação.
@@ -364,7 +432,7 @@ async function main(): Promise<void> {
     const store = storeByName.get(item.store);
     const source = sourceByName.get(item.source);
     if (productId === undefined || store === undefined || source === undefined) continue;
-    await upsertOffer({
+    const savedOffer = await upsertOffer({
       productId,
       storeId: store.id,
       sourceId: source.id,
@@ -379,6 +447,22 @@ async function main(): Promise<void> {
       observedAt: hoursAgo(item.observedHoursAgo ?? 1),
     });
     written += 1;
+
+    // Histórico de demonstração (EXP-001): observações anteriores, mais caras, para a página do jogo poder falar do
+    // preço observado no período com a cobertura declarada. Nada disso é preço real.
+    await query(
+      `insert into price_observations (offer_id, source_id, price_cents, reference_price_cents, availability, observed_at)
+       values ($1, $2, $3, $4, 'available', $5), ($1, $2, $6, $4, 'available', $7)`,
+      [
+        savedOffer.id,
+        source.id,
+        Math.round(item.price * 1.18),
+        item.reference ?? null,
+        hoursAgo(55 * 24),
+        Math.round(item.price * 1.05),
+        hoursAgo(20 * 24),
+      ],
+    );
   }
 
   // Home de demonstração: banners e seções, uma de cada tipo de regra.

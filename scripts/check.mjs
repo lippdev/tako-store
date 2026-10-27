@@ -4,6 +4,7 @@
 //
 //   node scripts/check.mjs
 
+import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -19,11 +20,18 @@ const REQUIRED = [
   "CLAUDE.md",
   "CONTRIBUTING.md",
   "docs/PRD.md",
+  "docs/acessibilidade.md",
+  "docs/backup.md",
+  "docs/monitoracao.md",
   "apps/web/package.json",
   "apps/worker/package.json",
   "packages/domain/src/index.ts",
   "packages/db/src/index.ts",
   "packages/connectors/src/index.ts",
+  "packages/ingest/src/index.ts",
+  "scripts/backup.sh",
+  "scripts/restore.sh",
+  "scripts/check-contrast.mjs",
   "docker-compose.yml",
   "design/desktop/README.md",
   "design/desktop/tokens.css",
@@ -85,9 +93,13 @@ for (const name of readdirSync(componentsDir)) {
   if (!existsSync(join(componentsDir, name, `${name}.demo.tsx`))) fail(`apps/web/src/components/${name} está sem ${name}.demo.tsx`);
 }
 
+/** Contraste dos tokens e uso de `--text-dim` como texto (STO-006): o script é a fonte da verdade. */
+const contrast = spawnSync(process.execPath, [join(root, "scripts", "check-contrast.mjs")], { encoding: "utf8" });
+if (contrast.status !== 0) fail(`contraste reprovado:\n${contrast.stdout ?? ""}${contrast.stderr ?? ""}`);
+
 if (failures.length > 0) {
   console.error(failures.map((f) => `  ✗ ${f}`).join("\n"));
   console.error(`\n${String(failures.length)} problema(s).`);
   process.exit(1);
 }
-console.log("Tudo em ordem: arquivos, skills, tokens, fontes e ícones.");
+console.log("Tudo em ordem: arquivos, skills, tokens, fontes, ícones e contraste.");
