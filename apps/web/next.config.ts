@@ -1,0 +1,19 @@
+import type { NextConfig } from "next";
+
+const nextConfig: NextConfig = {
+  // O repositório é público e o produto é uma loja: os headers de segurança entram aqui, num lugar só.
+  headers() {
+    return Promise.resolve([
+      {
+        source: "/:path*",
+        headers: [
+          { key: "X-Content-Type-Options", value: "nosniff" },
+          { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+          { key: "X-Frame-Options", value: "DENY" },
+        ],
+      },
+    ]);
+  },
+};
+
+export default nextConfig;

@@ -1,0 +1,43 @@
+import type { Metadata } from "next";
+import Link from "next/link";
+import { Marca } from "@/components/Marca/Marca";
+import { entrar } from "../actions";
+import styles from "../admin.module.css";
+
+export const metadata: Metadata = { title: "Entrar no painel", robots: { index: false } };
+
+/** Login do painel (CAT-002). Formulário sem JavaScript: funciona com o servidor sozinho. */
+export default async function EntrarPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ erro?: string; destino?: string }>;
+}) {
+  const { erro, destino } = await searchParams;
+  return (
+    <div className={styles["login"]}>
+      <div className={styles["loginCard"]}>
+        <Marca />
+        <h1>Painel da Tako Store</h1>
+        <p>Entre com a conta administrativa.</p>
+        {erro !== undefined && <div className={styles["error"]}>E-mail ou senha inválidos.</div>}
+        <form action={entrar} className={styles["form"]}>
+          <input type="hidden" name="destino" value={destino ?? "/admin"} />
+          <label className={styles["field"]}>
+            <span>E-mail</span>
+            <input type="email" name="email" required autoComplete="username" autoFocus />
+          </label>
+          <label className={styles["field"]}>
+            <span>Senha</span>
+            <input type="password" name="senha" required autoComplete="current-password" />
+          </label>
+          <button type="submit" className={styles["primary"]}>
+            Entrar
+          </button>
+        </form>
+        <p className={styles["muted"]} style={{ marginTop: 20 }}>
+          Demonstração: admin@tako.dev / tako-demo-2026. <Link href="/">Voltar à loja</Link>
+        </p>
+      </div>
+    </div>
+  );
+}

@@ -1,0 +1,21 @@
+# Banco de desenvolvimento do Tako Store. `npm run db:up` sobe e espera ficar saudável.
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: tako-store-postgres
+    environment:
+      POSTGRES_USER: tako
+      POSTGRES_PASSWORD: tako
+      POSTGRES_DB: tako_store
+    ports:
+      - "5432:5432"
+    volumes:
+      - tako-store-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tako -d tako_store"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  tako-store-postgres:

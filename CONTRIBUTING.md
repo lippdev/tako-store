@@ -84,13 +84,17 @@ responde `403 Resource not accessible by integration`), então a primeira vez é
 
 ## Verificação antes de abrir o PR
 
-Em `web/`:
+Na raiz do repositório:
 
 ```bash
+node scripts/check.mjs
 npm run typecheck
 npm run lint
+npm test          # domínio, banco (precisa do Postgres em docker compose) e conectores
 npm run build
 ```
 
-Mudança visual também se confere no navegador, a 1600×900 (a medida do design system), contra a galeria
-`#/componentes`.
+Para os testes de banco: `npm run db:up && npm run db:migrate && npm run db:seed`.
+
+Mudança visual também se confere no navegador, a 1600×900 (a medida do design system) e em 390×844, contra a galeria
+`/dev/componentes` e a especificação em `design/desktop/components/<Nome>/README.md`.
