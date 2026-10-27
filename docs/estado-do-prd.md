@@ -93,8 +93,7 @@ o retrato da implementação e envelhece com ela.
 6. **Sessão com leitor de tela** — a auditoria de STO-006 conferiu semântica, rótulos, foco e contraste; falta a
    passagem com NVDA/VoiceOver.
 7. **Token `--text-dim`** — 3,02:1 no design system do launcher; a correção é lá (ADR-0001), não aqui.
-8. **Importação e alteração em lote do catálogo, rascunho da home com histórico** — o PRD pede (§12.2 e §12.4);
-   ainda não está no painel. Não bloqueia colar a chave de afiliado.
+
 
 ## Administração (§12) além do §20
 
@@ -111,3 +110,5 @@ o retrato da implementação e envelhece com ela.
 | Feed só em https público | ✅ | `assertPublicFeedUrl` recusa rede local, IP privado e redirecionamento interno |
 | Privacidade | ✅ | `/privacidade` e [privacidade.md](privacidade.md); `npm run worker -- retain` apaga clique, tentativa e log fora do prazo |
 | Desativar ofertas de fonte | ✅ | Botão em `/admin/fontes`: a oferta sai da comparação, o histórico fica |
+| Catálogo em arquivo | ✅ | `/admin/jogos`: exportar tudo em JSON, importar com prévia (novo, alterado, sem mudança, erro por linha) e aplicar em transação |
+| Rascunho e histórico da home | ✅ | `/admin/home`: salvar versão com nota, restaurar cria versão nova; o histórico nunca é apagado |

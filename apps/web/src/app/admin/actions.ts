@@ -14,7 +14,9 @@ import {
   findGameBySlug,
   getGameById,
   getSourceBySlug,
+  getHomeVersion,
   getStoreBySlug,
+  homeSnapshot,
   listAllGames,
   listMediaAssets,
   mergeGames,
@@ -34,6 +36,8 @@ import {
   upsertBanner,
   upsertGame,
   upsertProduct,
+  restoreHomeVersion,
+  saveHomeVersion,
   upsertSection,
   upsertSource,
   upsertStore,
@@ -759,4 +763,26 @@ export async function confirmarImportacaoCatalogo(form: FormData): Promise<void>
     detail: { jogos: result.applied.length, recusados: result.failed.length },
   });
   redirect(`/admin/jogos?ok=importado&jogos=${String(result.applied.length)}`);
+}
+
+/** Rascunho da home (PRD §12.4): guarda o estado num cookie de rascunho versionado — na prática, salva e não publica. */
+export async function salvarRascunhoHome(form: FormData): Promise<void> {
+  const user = await requirePermission("home:write");
+  const note = text(form, "nota");
+  const version = await saveHomeVersion(user.email, note === "" ? null : note);
+  await writeAudit({ actor: user, action: "home:rascunho", entity: "home_version", entityId: version.id, detail: { nota: note } });
+  redirect("/admin/home?ok=rascunho");
+}
+
+/** Restaura uma versão anterior da home. O histórico fica; a restauração cria uma versão nova com o estado anterior. */
+export async function restaurarHome(form: FormData): Promise<void> {
+  const user = await requirePermission("home:write");
+  const id = text(form, "id");
+  const before = await getHomeVersion(id);
+  if (before === null) redirect("/admin/home?erro=versao");
+  const state = await homeSnapshot();
+  await restoreHomeVersion(id);
+  await saveHomeVersion(user.email, `restaurou a versão de ${new Date(before.createdAt).toLocaleString("pt-BR")}`, state);
+  await writeAudit({ actor: user, action: "home:restaurar", entity: "home_version", entityId: id });
+  redirect("/admin/home?ok=restaurada");
 }
