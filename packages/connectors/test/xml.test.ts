@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 
 import { decodeEntities, parseXml, xmlRecords } from "../src/xml";
 import { collectFeed } from "../src/feed";
+import { setFeedHostResolver } from "../src/public-url";
 
 const XML = `<?xml version="1.0" encoding="UTF-8"?>
 <ofertas>
@@ -49,9 +50,11 @@ test("árvore ignora declaração, comentário e doctype", () => {
 
 function withFetch(body: string, contentType = "application/xml") {
   const original = globalThis.fetch;
+  setFeedHostResolver(async () => ["203.0.113.10"]);
   globalThis.fetch = (async () => new Response(body, { status: 200, headers: { "content-type": contentType } })) as typeof fetch;
   return () => {
     globalThis.fetch = original;
+    setFeedHostResolver(null);
   };
 }
 
