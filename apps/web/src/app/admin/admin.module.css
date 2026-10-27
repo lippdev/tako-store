@@ -360,3 +360,8 @@
   color: var(--text-dim);
   font-size: 13px;
 }
+
+.warnText {
+  color: var(--warning);
+  font-weight: 600;
+}
