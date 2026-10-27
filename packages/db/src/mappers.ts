@@ -2,6 +2,12 @@
 
 import type { Availability, Game, Offer, OperatingSystem, PartnerStatus, Product, ProductKind, Source, Store } from "@tako/domain";
 
+/** Timestamp do Postgres chega como `Date`; a fronteira do banco entrega sempre ISO 8601 em texto. */
+export function toIso(value: Date | string | null): string | null {
+  if (value === null) return null;
+  return value instanceof Date ? value.toISOString() : new Date(value).toISOString();
+}
+
 export interface GameRow {
   id: string;
   slug: string;
@@ -121,7 +127,7 @@ export interface SourceRow {
   terms_url: string | null;
   attribution: string | null;
   status: Source["status"];
-  last_run_at: string | null;
+  last_run_at: Date | null;
   consecutive_failures: number;
 }
 
@@ -144,7 +150,7 @@ export function toSource(row: SourceRow): Source {
     termsUrl: row.terms_url,
     attribution: row.attribution,
     status: row.status,
-    lastRunAt: row.last_run_at,
+    lastRunAt: toIso(row.last_run_at),
     consecutiveFailures: row.consecutive_failures,
   };
 }

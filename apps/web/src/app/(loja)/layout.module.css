@@ -46,7 +46,7 @@
   margin: 0 0 6px;
 }
 .dim {
-  color: var(--text-dim);
+  color: var(--text-muted);
 }
 .demo {
   color: var(--warning);

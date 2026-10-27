@@ -67,7 +67,7 @@ export default async function DuplicatasPage({
                   </label>
                   <label className={styles["field"]}>
                     <span>Jogo duplicado (é arquivado)</span>
-                    <select name="duplicadoId" required>
+                    <select name="duplicadoId" required defaultValue={group.games[1]?.id ?? ""}>
                       {group.games.map((game) => (
                         <option key={game.id} value={game.id}>
                           {game.title} — /{game.slug}

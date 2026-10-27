@@ -3,6 +3,7 @@
 
 import { groupDuplicates, type DuplicateGame, type DuplicateGroup, type MergeImpact } from "@tako/domain";
 import { query, withTransaction } from "../pool";
+import { toIso } from "../mappers";
 
 export interface DuplicateCandidateGroup extends DuplicateGroup {
   /** Produtos e ofertas que a união move para o jogo principal. */
@@ -173,7 +174,7 @@ export interface GameMergeRecord {
 }
 
 export async function listGameMerges(limit = 20): Promise<GameMergeRecord[]> {
-  return query<GameMergeRecord>(
+  const rows = await query<Omit<GameMergeRecord, "createdAt"> & { createdAt: Date }>(
     `select m.id::text as id, m.survivor_id as "survivorId", s.title as "survivorTitle",
             m.duplicate_id as "duplicateId", m.duplicate_title as "duplicateTitle", m.duplicate_slug as "duplicateSlug",
             m.actor_email as "actorEmail", m.impact, m.created_at as "createdAt"
@@ -181,6 +182,7 @@ export async function listGameMerges(limit = 20): Promise<GameMergeRecord[]> {
      order by m.created_at desc limit $1`,
     [limit],
   );
+  return rows.map((row) => ({ ...row, createdAt: toIso(row.createdAt) ?? "" }));
 }
 
 /** Jogos arquivados que guardam produtos despublicados por causa de uma união — a trilha para reverter. */

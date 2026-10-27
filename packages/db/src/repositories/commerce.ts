@@ -3,7 +3,7 @@
 
 import type { ActivationPlatform, Availability, Offer, PartnerStatus, Source, SourceKind, Store } from "@tako/domain";
 import { query, queryOne } from "../pool";
-import { toOffer, toSource, toStore, type OfferRow, type SourceRow, type StoreRow } from "../mappers";
+import { toIso, toOffer, toSource, toStore, type OfferRow, type SourceRow, type StoreRow } from "../mappers";
 
 const STORE_COLUMNS = `id, slug, name, partner_status, enabled, allowed_domains, link_kind, attribution, regions, currencies`;
 const SOURCE_COLUMNS = `id, slug, name, kind, enabled, max_age_hours, regions, currencies, notes, access, format,
@@ -298,7 +298,7 @@ export async function listPriceHistoryForProducts(
   const byProduct = new Map<string, { productId: string; priceCents: number; observedAt: string; sourceId: string }[]>();
   for (const row of rows) {
     const list = byProduct.get(row.productId) ?? [];
-    list.push(row);
+    list.push({ ...row, observedAt: toIso(row.observedAt) ?? "" });
     byProduct.set(row.productId, list);
   }
   return byProduct;
@@ -359,7 +359,7 @@ export interface IngestionRun {
 }
 
 export async function listIngestionRuns(limit = 30): Promise<IngestionRun[]> {
-  return query<IngestionRun>(
+  const rows = await query<IngestionRun & { startedAt: Date; finishedAt: Date | null }>(
     `select r.id, r.source_id as "sourceId", s.slug as "sourceSlug", s.name as "sourceName", r.status, r.triggered_by as "triggeredBy",
             r.received, r.accepted, r.rejected, r.message,
             r.started_at as "startedAt", r.finished_at as "finishedAt",
@@ -369,6 +369,7 @@ export async function listIngestionRuns(limit = 30): Promise<IngestionRun[]> {
      order by r.started_at desc limit $1`,
     [limit],
   );
+  return rows.map((row) => ({ ...row, startedAt: toIso(row.startedAt) ?? "", finishedAt: toIso(row.finishedAt) }));
 }
 
 export interface IngestionError {
@@ -389,12 +390,13 @@ export async function getIngestionRun(runId: string): Promise<{
   status: string;
   startedAt: string;
 } | null> {
-  return queryOne(
+  const row = await queryOne<{ id: string; sourceId: string; sourceSlug: string; sourceName: string; status: string; startedAt: Date }>(
     `select r.id, r.source_id as "sourceId", s.slug as "sourceSlug", s.name as "sourceName", r.status,
             r.started_at as "startedAt"
      from ingestion_runs r join sources s on s.id = r.source_id where r.id = $1`,
     [runId],
   );
+  return row === null ? null : { ...row, startedAt: toIso(row.startedAt) ?? "" };
 }
 
 export async function listIngestionErrors(
@@ -408,12 +410,13 @@ export async function listIngestionErrors(
 
 /** Erros de uma execução com o conteúdo original, para o reprocessamento (OFR-006). */
 export async function listIngestionErrorsDetailed(runId: string): Promise<IngestionError[]> {
-  return query<IngestionError>(
+  const rows = await query<Omit<IngestionError, "resolvedAt"> & { resolvedAt: Date | null }>(
     `select id::text as id, line, code, message, payload,
             resolved_at as "resolvedAt", resolved_run_id as "resolvedRunId"
      from ingestion_errors where run_id = $1 order by line nulls last, id`,
     [runId],
   );
+  return rows.map((row) => ({ ...row, resolvedAt: toIso(row.resolvedAt) }));
 }
 
 /** Marca os erros que a nova execução conseguiu reprocessar. */
@@ -427,7 +430,7 @@ export async function resolveIngestionErrors(ids: readonly string[], resolvedRun
 
 /** Execuções com erro ainda aberto: a fila que o operador reprocessa. */
 export async function runsWithOpenErrors(limit = 10): Promise<{ runId: string; sourceSlug: string; sourceName: string; startedAt: string; openErrors: number }[]> {
-  return query(
+  const rows = await query<{ runId: string; sourceSlug: string; sourceName: string; startedAt: Date; openErrors: number }>(
     `select r.id as "runId", s.slug as "sourceSlug", s.name as "sourceName", r.started_at as "startedAt",
             count(e.id)::int as "openErrors"
      from ingestion_errors e
@@ -439,6 +442,7 @@ export async function runsWithOpenErrors(limit = 10): Promise<{ runId: string; s
      limit $1`,
     [limit],
   );
+  return rows.map((row) => ({ ...row, startedAt: toIso(row.startedAt) ?? "" }));
 }
 
 /** Marca a execução na fonte: última execução e falhas consecutivas (OPS-001). */

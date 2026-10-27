@@ -216,7 +216,7 @@ export async function retryFailedRun(runId: string, actor: string): Promise<RunS
   const status: RunSummary["status"] = rejected === 0 ? "success" : accepted > 0 ? "partial" : "failed";
   const message = `Reprocessamento de ${runId}: ${String(accepted)} de ${String(retried.length)} erro(s) resolvido(s)`;
   await finishIngestionRun(newRunId, { status, received: retried.length, accepted, rejected, message });
-  await touchSourceRun(source.id, status === "failed");
+  // Reprocessar não é coleta: o estado da fonte (falha seguida) já foi registrado pela execução original.
 
   return {
     runId: newRunId,

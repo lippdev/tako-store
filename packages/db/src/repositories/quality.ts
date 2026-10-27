@@ -3,6 +3,7 @@
 
 import { isAllowedRedirect } from "@tako/domain";
 import { query } from "../pool";
+import { toIso } from "../mappers";
 
 export interface QualityIssue {
   kind: string;
@@ -129,10 +130,10 @@ export interface IntegrationHealth {
  */
 export async function integrationHealth(now = new Date()): Promise<IntegrationHealth> {
   const rows = await query<{
+    lastRunAt: Date | null;
     slug: string;
     name: string;
     enabled: boolean;
-    lastRunAt: string | null;
     consecutiveFailures: number;
     openErrors: number;
   }>(
@@ -141,7 +142,8 @@ export async function integrationHealth(now = new Date()): Promise<IntegrationHe
               where r.source_id = s.id and e.resolved_at is null) as "openErrors"
      from sources s where s.status = 'approved' order by s.name`,
   );
-  const totals = await query<{ staleOffers: number; openErrors: number; lastSuccess: string | null }>(
+  const sources = rows.map((row) => ({ ...row, lastRunAt: toIso(row.lastRunAt) }));
+  const totals = await query<{ staleOffers: number; openErrors: number; lastSuccess: Date | null }>(
     `select
        (select count(*)::int from offers o join sources s on s.id = o.source_id
          where o.observed_at < $1::timestamptz - make_interval(hours => s.max_age_hours)) as "staleOffers",
@@ -152,10 +154,10 @@ export async function integrationHealth(now = new Date()): Promise<IntegrationHe
   const row = totals[0];
   return {
     database: "ok",
-    sources: rows,
+    sources,
     staleOffers: row?.staleOffers ?? 0,
     openErrors: row?.openErrors ?? 0,
-    failingSources: rows.filter((source) => source.consecutiveFailures > 0).length,
-    lastSuccessfulRun: row?.lastSuccess ?? null,
+    failingSources: sources.filter((source) => source.consecutiveFailures > 0).length,
+    lastSuccessfulRun: toIso(row?.lastSuccess ?? null),
   };
 }

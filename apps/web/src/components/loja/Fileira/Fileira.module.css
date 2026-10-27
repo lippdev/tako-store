@@ -12,7 +12,7 @@
 }
 .head p {
   margin: 0;
-  color: var(--text-dim);
+  color: var(--text-muted);
 }
 .grid {
   display: grid;

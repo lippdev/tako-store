@@ -312,21 +312,21 @@ export async function unirJogos(form: FormData): Promise<void> {
   const user = await requirePermission("games:write");
   const survivorId = text(form, "principalId");
   const duplicateId = text(form, "duplicadoId");
+  let failure: string | null = null;
   try {
     const result = await mergeGames({ survivorId, duplicateId, actorEmail: user.email });
     console.log(result.summary);
   } catch (error) {
-    const reason = error instanceof Error ? error.message : "erro desconhecido";
+    failure = error instanceof Error ? error.message : "erro desconhecido";
     await writeAudit({
       actor: user,
       action: "jogo:unir-falhou",
       entity: "game",
       entityId: survivorId,
-      detail: { duplicado: duplicateId, motivo: reason },
+      detail: { duplicado: duplicateId, motivo: failure },
     });
-    redirect(`/admin/duplicatas?erro=${encodeURIComponent(reason)}`);
   }
-  redirect("/admin/duplicatas?ok=uniao");
+  redirect(failure === null ? "/admin/duplicatas?ok=uniao" : `/admin/duplicatas?erro=${encodeURIComponent(failure)}`);
 }
 
 /** Matriz de fontes (PAR-004): acesso, formato, cobertura em BRL, frequência, links e atribuição. */
@@ -360,19 +360,24 @@ export async function salvarMatrizFonte(form: FormData): Promise<void> {
 export async function reprocessarExecucao(form: FormData): Promise<void> {
   const user = await requirePermission("sources:write");
   const runId = text(form, "execucaoId");
+  let failure: string | null = null;
+  let summary: { runId: string; resolved: number; retried: number } | null = null;
   try {
-    const summary = await retryFailedRun(runId, user.email);
+    const result = await retryFailedRun(runId, user.email);
+    summary = { runId: result.runId, resolved: result.resolved, retried: result.retried };
     await writeAudit({
       actor: user,
       action: "fonte:reprocessar",
       entity: "ingestion_run",
       entityId: runId,
-      detail: { novaExecucao: summary.runId, resolvidos: summary.resolved, tentados: summary.retried },
+      detail: { novaExecucao: result.runId, resolvidos: result.resolved, tentados: result.retried },
     });
-    redirect(`/admin/fontes?ok=reprocessado&resolvidos=${String(summary.resolved)}&tentados=${String(summary.retried)}`);
   } catch (error) {
-    const reason = error instanceof Error ? error.message : "erro desconhecido";
-    await writeAudit({ actor: user, action: "fonte:reprocessar-falhou", entity: "ingestion_run", entityId: runId, detail: { motivo: reason } });
-    redirect(`/admin/fontes?erro=${encodeURIComponent(reason)}`);
+    failure = error instanceof Error ? error.message : "erro desconhecido";
+    await writeAudit({ actor: user, action: "fonte:reprocessar-falhou", entity: "ingestion_run", entityId: runId, detail: { motivo: failure } });
   }
+  if (failure !== null) redirect(`/admin/fontes?erro=${encodeURIComponent(failure)}`);
+  redirect(
+    `/admin/fontes?ok=reprocessado&resolvidos=${String(summary?.resolved ?? 0)}&tentados=${String(summary?.retried ?? 0)}`,
+  );
 }

@@ -2,6 +2,7 @@
 
 import type { MediaAsset, MediaKind } from "@tako/domain";
 import { query, queryOne } from "../pool";
+import { toIso } from "../mappers";
 
 interface MediaRow {
   id: string;
@@ -11,7 +12,7 @@ interface MediaRow {
   origin: string;
   attribution: string | null;
   position: number;
-  created_at: string;
+  created_at: Date;
 }
 
 const MEDIA_COLUMNS = `id, game_id, kind, url, origin, attribution, position, created_at`;
@@ -25,7 +26,7 @@ function toMediaAsset(row: MediaRow): MediaAsset {
     origin: row.origin,
     attribution: row.attribution,
     position: row.position,
-    createdAt: row.created_at,
+    createdAt: toIso(row.created_at) ?? new Date(0).toISOString(),
   };
 }
 
