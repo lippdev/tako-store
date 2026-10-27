@@ -1,0 +1,83 @@
+[
+  {
+    "externalId": "demo-100",
+    "title": "As Crônicas de Vela",
+    "platform": "steam",
+    "region": "BR",
+    "currency": "BRL",
+    "priceCents": 8490,
+    "referencePriceCents": 12990,
+    "availability": "available",
+    "url": "https://pixelstore.example/item/as-cronicas-de-vela",
+    "storeSlug": "pixel-store"
+  },
+  {
+    "externalId": "demo-101",
+    "title": "Estação Órbita",
+    "edition": "Órbita Completa",
+    "platform": "steam",
+    "region": "BR",
+    "currency": "BRL",
+    "priceCents": 20990,
+    "referencePriceCents": 24990,
+    "availability": "available",
+    "url": "https://prismagames.example/item/estacao-orbita-completa",
+    "storeSlug": "prisma-games"
+  },
+  {
+    "externalId": "demo-102",
+    "title": "Vento Sul",
+    "platform": "steam",
+    "region": "BR",
+    "currency": "BRL",
+    "priceCents": 9990,
+    "referencePriceCents": 13990,
+    "availability": "available",
+    "coupon": "VENTO10",
+    "url": "https://bazardigital.example/item/vento-sul",
+    "storeSlug": "bazar-digital"
+  },
+  {
+    "externalId": "demo-103",
+    "title": "Neblina",
+    "platform": "steam",
+    "region": "BR",
+    "currency": "BRL",
+    "priceCents": 3490,
+    "availability": "available",
+    "url": "https://pixelstore.example/item/neblina",
+    "storeSlug": "pixel-store"
+  },
+  {
+    "externalId": "demo-104",
+    "title": "Jogo Que Não Existe no Catálogo",
+    "platform": "steam",
+    "region": "BR",
+    "currency": "BRL",
+    "priceCents": 4990,
+    "availability": "available",
+    "url": "https://pixelstore.example/item/desconhecido",
+    "storeSlug": "pixel-store"
+  },
+  {
+    "externalId": "demo-105",
+    "title": "Rota 9",
+    "platform": "steam",
+    "region": "BR",
+    "currency": "BRL",
+    "priceCents": 0,
+    "url": "https://prismagames.example/item/rota-9",
+    "storeSlug": "prisma-games"
+  },
+  {
+    "externalId": "demo-106",
+    "title": "Café das 4",
+    "platform": "xbox",
+    "region": "BR",
+    "currency": "BRL",
+    "priceCents": 4590,
+    "availability": "unavailable",
+    "url": "https://bazardigital.example/item/cafe-das-4",
+    "storeSlug": "bazar-digital"
+  }
+]
