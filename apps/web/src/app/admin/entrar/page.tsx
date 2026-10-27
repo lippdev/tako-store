@@ -10,9 +10,9 @@ export const metadata: Metadata = { title: "Entrar no painel", robots: { index: 
 export default async function EntrarPage({
   searchParams,
 }: {
-  searchParams: Promise<{ erro?: string; destino?: string; mfa?: string }>;
+  searchParams: Promise<{ erro?: string; destino?: string; mfa?: string; bloqueado?: string }>;
 }) {
-  const { erro, destino, mfa } = await searchParams;
+  const { erro, destino, mfa, bloqueado } = await searchParams;
   const codeStep = mfa === "1";
   return (
     <div className={styles["login"]}>
@@ -20,6 +20,11 @@ export default async function EntrarPage({
         <Marca />
         <h1>Painel da Tako Store</h1>
         <p>Entre com a conta administrativa.</p>
+        {bloqueado !== undefined && (
+          <div className={styles["error"]}>
+            Tentativas demais em pouco tempo. Aguarde cerca de {bloqueado} minutos antes de tentar de novo.
+          </div>
+        )}
         {erro !== undefined && (
           <div className={styles["error"]}>
             {codeStep ? "Código incorreto ou vencido. Tente o código atual do aplicativo." : "E-mail ou senha inválidos."}

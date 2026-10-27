@@ -86,6 +86,7 @@ export async function entrar(form: FormData): Promise<void> {
   const result = await signIn(email, password, text(form, "codigo"));
   if (result === "ok") redirect(destination);
   if (result === "mfa") redirect(`/admin/entrar?mfa=1&destino=${encodeURIComponent(destination)}`);
+  if (result === "throttled") redirect(`/admin/entrar?bloqueado=15&destino=${encodeURIComponent(destination)}`);
   redirect(`/admin/entrar?erro=1&destino=${encodeURIComponent(destination)}`);
 }
 
