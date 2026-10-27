@@ -1,0 +1,106 @@
+/* Início: só a composição da página. Cor, medida e movimento vêm do `tokens.css` e do `base.css`. */
+
+.page {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  padding: 0 40px;
+  background: var(--canvas);
+}
+
+.topo {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 72px;
+  border-bottom: 1px solid var(--line);
+}
+
+.acoes {
+  display: flex;
+  gap: 24px;
+}
+
+.acoes a {
+  color: var(--text-muted);
+  text-decoration: none;
+}
+
+.acoes a:hover {
+  color: var(--text);
+}
+
+.conteudo {
+  flex: 1;
+  width: 100%;
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 48px 0;
+}
+
+.abertura {
+  max-width: 760px;
+}
+
+.abertura h1 {
+  margin: 12px 0 16px;
+}
+
+.linha {
+  margin: 0;
+  color: var(--text-muted);
+}
+
+.cartoes {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  margin-top: 48px;
+}
+
+.cartao {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--surface);
+}
+
+.cartao p {
+  margin: 0;
+  color: var(--text-muted);
+}
+
+.titulo {
+  margin: 0;
+}
+
+.texto {
+  flex: 1;
+}
+
+.cartao a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.cartao a:hover {
+  text-decoration: underline;
+}
+
+.rodape {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 64px;
+  border-top: 1px solid var(--line);
+  color: var(--text-dim);
+}
+
+@media (max-width: 960px) {
+  .cartoes {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
