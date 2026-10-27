@@ -19,7 +19,19 @@ export function discountPercent(priceCents: Cents, referenceCents: Cents | null)
   return Math.floor(((referenceCents - priceCents) * 100) / referenceCents);
 }
 
+/** Teto do que ainda é um preço, não um número solto: R$ 1 bilhão. */
+export const MAX_PRICE_CENTS = 100_000_000_000;
+
 /** Preço válido é inteiro, positivo e dentro do que cabe em reais (R$ 1 bilhão). */
 export function isValidPrice(cents: unknown): cents is Cents {
-  return typeof cents === "number" && Number.isSafeInteger(cents) && cents > 0 && cents <= 100_000_000_000;
+  return typeof cents === "number" && Number.isSafeInteger(cents) && cents > 0 && cents <= MAX_PRICE_CENTS;
+}
+
+/**
+ * Variação anormal (PRD §12.7): o preço caiu para menos de um quinto do anterior, ou subiu mais de cinco vezes.
+ * Conta em inteiro. Sem preço anterior válido, não há variação para apontar — o painel não inventa alerta.
+ */
+export function isAbnormalPriceChange(previousCents: number, currentCents: number): boolean {
+  if (!isValidPrice(previousCents) || !isValidPrice(currentCents)) return false;
+  return currentCents * 5 < previousCents || currentCents > previousCents * 5;
 }
