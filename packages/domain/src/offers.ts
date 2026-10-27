@@ -24,6 +24,11 @@ export interface Store {
   attribution: string | null;
   regions: string[];
   currencies: string[];
+  /** Nome do parâmetro de afiliado e o valor dele (a chave do parceiro), quando a loja paga por indicação. */
+  affiliateParam: string | null;
+  affiliateValue: string | null;
+  /** Molde alternativo, com `{url}` no lugar do endereço da oferta. */
+  affiliateTemplate: string | null;
 }
 
 export const SOURCE_KINDS = ["api", "feed", "file", "page"] as const;

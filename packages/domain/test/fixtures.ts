@@ -16,6 +16,9 @@ export function store(overrides: Partial<Store> = {}): Store {
     attribution: null,
     regions: ["BR"],
     currencies: ["BRL"],
+    affiliateParam: null,
+    affiliateValue: null,
+    affiliateTemplate: null,
     ...overrides,
   };
 }
