@@ -41,6 +41,56 @@ export interface Source {
   currencies: string[];
   /** Regras da fonte que não podem ser perdidas: parâmetros obrigatórios, atribuição, limites. */
   notes: string | null;
+  /** Como se chega aos dados: API, feed do parceiro, página pública ou ainda desconhecido (PAR-004). */
+  access: SourceAccess;
+  /** Formato que a fonte entrega. */
+  format: SourceFormat;
+  /** A fonte cobre preço em real? Fonte sem BRL não alimenta comparação no Brasil. */
+  coversBrl: boolean;
+  /** Intervalo de coleta, em horas. `null` quando ainda não se sabe. */
+  cadenceHours: number | null;
+  /** Documentação de acesso, quando existe. */
+  docsUrl: string | null;
+  /** Termos de uso e restrições de atribuição. */
+  termsUrl: string | null;
+  /** Texto de atribuição exigido pela fonte. */
+  attribution: string | null;
+  /** Estágio da fonte na matriz: candidata, em avaliação, aprovada ou recusada (PAR-004). */
+  status: SourceStatus;
+}
+
+export const SOURCE_ACCESSES = ["api", "partner-feed", "public-page", "unknown"] as const;
+export type SourceAccess = (typeof SOURCE_ACCESSES)[number];
+
+export const SOURCE_FORMATS = ["json", "csv", "xml", "html", "unknown"] as const;
+export type SourceFormat = (typeof SOURCE_FORMATS)[number];
+
+export const SOURCE_STATUSES = ["candidate", "evaluating", "approved", "rejected"] as const;
+export type SourceStatus = (typeof SOURCE_STATUSES)[number];
+
+export const SOURCE_ACCESS_LABELS: Record<SourceAccess, string> = {
+  api: "API",
+  "partner-feed": "Feed do parceiro",
+  "public-page": "Página pública",
+  unknown: "Não informado",
+};
+
+export const SOURCE_STATUS_LABELS: Record<SourceStatus, string> = {
+  candidate: "Candidata",
+  evaluating: "Em avaliação",
+  approved: "Aprovada",
+  rejected: "Recusada",
+};
+
+/** A fonte pode alimentar a comparação brasileira? Precisa de acesso lícito, formato conhecido e cobertura em BRL. */
+export function sourceIsUsable(source: Pick<Source, "access" | "format" | "coversBrl" | "status" | "enabled">): boolean {
+  return (
+    source.enabled &&
+    source.status === "approved" &&
+    source.access !== "unknown" &&
+    source.format !== "unknown" &&
+    source.coversBrl
+  );
 }
 
 export const AVAILABILITIES = ["available", "unavailable", "unknown"] as const;
