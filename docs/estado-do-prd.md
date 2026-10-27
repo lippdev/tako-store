@@ -21,8 +21,8 @@ o retrato da implementação e envelhece com ela.
 | Item | Estado | Onde |
 | :- | :- | :- |
 | CAT-001 Jogos e produtos | ✅ | `packages/domain/src/catalog.ts`, tabelas `games`/`products` |
-| CAT-002 Autenticação administrativa | ✅ | `packages/db/src/auth.ts` (scrypt, sessão revogável) |
-| CAT-003 Perfis e permissões | ✅ | `PERMISSIONS` no domínio, verificado em cada ação do painel |
+| CAT-002 Autenticação administrativa | ✅ | `packages/db/src/auth.ts` (scrypt, sessão revogável, segundo fator TOTP em `/admin/seguranca` com login em duas etapas) |
+| CAT-003 Perfis e permissões | ✅ | `PERMISSIONS` verificado em cada ação, `/admin/usuarios` para criar usuário, trocar papel, desativar e revogar sessões, `/admin/auditoria` com filtro por registro |
 | CAT-004 Gestão de jogos | ✅ | `/admin/jogos` (editar, publicar, ocultar, arquivar, auditoria) |
 | CAT-005 Gestão de imagens | ✅ | Biblioteca em `/admin/jogos/[id]`: capa/fundo/logo substituem a anterior, capturas na galeria, toda imagem com origem e atribuição; galeria na página do jogo |
 | CAT-006 Busca básica | ✅ | `foldText`, `/api/busca`, `/jogos?q=` |
@@ -93,3 +93,12 @@ o retrato da implementação e envelhece com ela.
 6. **Sessão com leitor de tela** — a auditoria de STO-006 conferiu semântica, rótulos, foco e contraste; falta a
    passagem com NVDA/VoiceOver.
 7. **Token `--text-dim`** — 3,02:1 no design system do launcher; a correção é lá (ADR-0001), não aqui.
+
+## Administração (§12) além do §20
+
+| Requisito | Estado | Onde |
+| :- | :- | :- |
+| Usuários e permissões | ✅ | `/admin/usuarios`: criar, trocar papel, desativar (revoga sessões) e revogar sessões |
+| MFA para administradores | ✅ | TOTP em `/admin/seguranca`, login em duas etapas; código conferido contra o vetor do RFC 6238 |
+| Registro de ações | ✅ | `audit_events` gravado em toda ação e visível em `/admin/auditoria` |
+| Edições, DLCs e bundles | ✅ | Formulário de produto no cadastro do jogo, com tipo, edição, plataforma e dependência |

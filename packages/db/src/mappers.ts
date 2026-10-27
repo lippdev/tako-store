@@ -52,6 +52,7 @@ export function toGame(row: GameRow): Game {
       screenshots: row.screenshots,
     },
     published: row.published,
+    archived: row.archived,
     createdAt: row.created_at.toISOString(),
     updatedAt: row.updated_at.toISOString(),
   };

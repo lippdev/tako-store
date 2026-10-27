@@ -60,7 +60,8 @@ export default async function EntrarPage({
           </button>
         </form>
         <p className={styles["muted"]} style={{ marginTop: 20 }}>
-          Demonstração: admin@tako.dev / tako-demo-2026. <Link href="/">Voltar à loja</Link>
+          {process.env["DEMO_CATALOG"] !== "0" && <>Demonstração: admin@tako.dev / tako-demo-2026. </>}
+          <Link href="/">Voltar à loja</Link>
         </p>
       </div>
     </div>

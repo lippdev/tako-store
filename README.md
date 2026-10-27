@@ -20,7 +20,7 @@ domínio.
 | Catálogo e produtos | Jogo, edição, DLC e bundle; identificadores por fonte; biblioteca de imagens com procedência e galeria |
 | Curadoria | Revisão de duplicatas com impacto e união registrada em histórico; nenhuma união automática |
 | Ofertas e preço | Menor preço elegível por produto, região, moeda, disponibilidade e validade; empate documentado |
-| Painel | Login com perfis, jogos, duplicatas, vínculos, ofertas, lojas, fontes (com matriz e reprocessamento), home e qualidade |
+| Painel | Login com perfis e segundo fator, jogos, duplicatas, vínculos, ofertas, lojas, fontes (matriz e reprocessamento), produtos, usuários, auditoria, home e qualidade |
 | Importação | Contrato de conector, fonte de demonstração, arquivo JSON/CSV com erro por linha e reprocessamento dos erros pelo painel |
 | Loja pública | Home configurável, catálogo com filtros na URL, página do jogo com galeria e histórico de preço, busca com sugestões, redirecionamento seguro, sitemap |
 | Operação | `/api/health` com sinal de degradação, monitor em `scripts/healthcheck.mjs`, backup e restauração provados |
@@ -49,7 +49,7 @@ Rotas:
 | `/jogos` | catálogo com filtros e ordenação na URL |
 | `/jogo/<slug>` | página do jogo, produtos e ofertas elegíveis |
 | `/ir/<id-da-oferta>` | redirecionamento para a loja (domínio validado) |
-| `/admin` | painel (login `admin@tako.dev` / `tako-demo-2026`) |
+| `/admin` | painel (login `admin@tako.dev` / `tako-demo-2026`), com usuários, auditoria, segurança (segundo fator) |
 | `/dev` e `/dev/componentes` | base visual e galeria do design system |
 
 Importação pelo worker:

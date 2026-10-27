@@ -34,6 +34,8 @@ export interface Game {
   operatingSystems: OperatingSystem[];
   media: GameMedia;
   published: boolean;
+  /** Arquivado: saiu do catálogo, mas o histórico continua existindo (união de duplicata, por exemplo). */
+  archived: boolean;
   createdAt: string;
   updatedAt: string;
 }
