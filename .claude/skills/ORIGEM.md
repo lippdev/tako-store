@@ -26,7 +26,7 @@ diz quando abrir cada um.
 ## Origem e atualização
 
 Copiado de `lippdev/lippstack`, commit [`9024e71`](https://github.com/lippdev/lippstack/commit/9024e71844a873a7111a7e85735564f0328de64f)
-(`main`, 2026-10-23), em 2026-10-27.
+(`main`, 2026-10-23), em 27/10/2026.
 
 Não edite um arquivo daqui à mão: a próxima sincronia sobrescreve. Para atualizar:
 

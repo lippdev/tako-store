@@ -89,7 +89,7 @@ try {
   }
 
   const origin = join(root, ".claude", "skills", "ORIGEM.md");
-  const date = new Intl.DateTimeFormat("pt-BR", { dateStyle: "medium", timeZone: "America/Sao_Paulo" }).format(new Date());
+  const date = new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeZone: "America/Sao_Paulo" }).format(new Date());
   const text = readFileSync(origin, "utf8");
   writeFileSync(
     origin,
