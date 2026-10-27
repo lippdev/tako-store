@@ -30,6 +30,7 @@ export default function LojaLayout({ children }: { children: ReactNode }) {
           )}
           <nav className={styles["links"]}>
             <Link href="/jogos">Catálogo</Link>
+            <Link href="/privacidade">Privacidade</Link>
             <a href="https://github.com/lippdev/tako-store">Código</a>
           </nav>
         </div>

@@ -200,6 +200,20 @@ export async function setSourceEnabled(id: string, enabled: boolean): Promise<vo
   await query("update sources set enabled = $2, updated_at = now() where id = $1", [id, enabled]);
 }
 
+/**
+ * Tira as ofertas atuais de uma fonte da comparação (PRD §12.6). O histórico fica.
+ * Oferta indisponível não disputa o menor preço; a próxima coleta pode trazê-la de volta.
+ */
+export async function disableSourceOffers(sourceId: string): Promise<number> {
+  const rows = await query<{ id: string }>(
+    `update offers set availability = 'unavailable', updated_at = now()
+     where source_id = $1 and availability <> 'unavailable'
+     returning id`,
+    [sourceId],
+  );
+  return rows.length;
+}
+
 export interface OfferInput {
   productId: string;
   storeId: string;

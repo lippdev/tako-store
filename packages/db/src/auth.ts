@@ -297,3 +297,45 @@ export async function verifyUserTotp(userId: string, code: string): Promise<bool
   if (row === null || !row.mfa_enabled || row.mfa_secret === null) return false;
   return verifyTotp(row.mfa_secret, code);
 }
+
+// ——— Limite de tentativas (PRD §12.1) ———
+
+export const LOGIN_WINDOW_MINUTES = 15;
+export const LOGIN_MAX_FAILURES = 5;
+
+/** Registra a tentativa; sucesso limpa o histórico daquele e-mail. */
+export async function recordLoginAttempt(input: { email: string; ip: string | null; succeeded: boolean }): Promise<void> {
+  const email = input.email.trim().toLowerCase();
+  await query("insert into login_attempts (email, ip, succeeded) values ($1, $2, $3)", [email, input.ip, input.succeeded]);
+  if (input.succeeded) {
+    await query("delete from login_attempts where lower(email) = $1 and not succeeded", [email]);
+  }
+  await query("delete from login_attempts where created_at < now() - interval '24 hours'");
+}
+
+/**
+ * A conta (ou o endereço) está bloqueada por excesso de falhas na janela? Devolve quantas falhas houve e quantos
+ * minutos faltam para liberar.
+ */
+export async function loginThrottle(input: {
+  email: string;
+  ip: string | null;
+  now?: Date;
+}): Promise<{ blocked: boolean; failures: number; retryAfterMinutes: number }> {
+  const now = input.now ?? new Date();
+  const since = new Date(now.getTime() - LOGIN_WINDOW_MINUTES * 60_000);
+  const row = await queryOne<{ failures: number; oldest: Date | null }>(
+    `select count(*)::int as failures, min(created_at) as oldest
+     from login_attempts
+     where created_at >= $1 and not succeeded and (lower(email) = $2 or ($3::text is not null and ip = $3::text))`,
+    [since, input.email.trim().toLowerCase(), input.ip],
+  );
+  const failures = row?.failures ?? 0;
+  const blocked = failures >= LOGIN_MAX_FAILURES;
+  const oldest = row?.oldest ?? null;
+  const retryAfterMinutes =
+    blocked && oldest !== null
+      ? Math.max(1, Math.ceil((oldest.getTime() + LOGIN_WINDOW_MINUTES * 60_000 - now.getTime()) / 60_000))
+      : 0;
+  return { blocked, failures, retryAfterMinutes };
+}

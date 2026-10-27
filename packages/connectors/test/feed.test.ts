@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { applyFieldMap, collectFeed, validateFieldMap } from "../src/feed";
+import { feedAddressesProblem, feedUrlProblem, setFeedHostResolver } from "../src/public-url";
 
 const JSON_FEED = JSON.stringify({
   items: [
@@ -18,15 +19,20 @@ const CSV_FEED = [
 
 const MAP = { externalId: "sku", title: "nome", platform: "plataforma", priceCents: "preco_centavos", url: "link", storeSlug: "loja" };
 
-function withFetch(body: string, init: { status?: number; contentType?: string } = {}) {
+function withFetch(body: string, init: { status?: number; contentType?: string; location?: string } = {}) {
   const original = globalThis.fetch;
+  setFeedHostResolver(async () => ["203.0.113.10"]);
   globalThis.fetch = (async () =>
     new Response(body, {
       status: init.status ?? 200,
-      headers: { "content-type": init.contentType ?? "application/json" },
+      headers: {
+        "content-type": init.contentType ?? "application/json",
+        ...(init.location === undefined ? {} : { location: init.location }),
+      },
     })) as typeof fetch;
   return () => {
     globalThis.fetch = original;
+    setFeedHostResolver(null);
   };
 }
 
@@ -83,6 +89,17 @@ test("feed com status de erro vira exceção com a mensagem", async () => {
 
 test("feed recusa endereço que não é https", async () => {
   await assert.rejects(() => collectFeed({ url: "http://feed.example/ofertas.json", format: "json", fieldMap: {} }), /https/);
+});
+
+test("feed recusa rede interna antes de buscar", () => {
+  assert.match(feedUrlProblem("https://127.0.0.1/feed") ?? "", /rede local/);
+  assert.match(feedUrlProblem("https://169.254.169.254/latest") ?? "", /rede local/);
+  assert.match(feedUrlProblem("https://2130706433/feed") ?? "", /rede local/);
+  assert.match(feedUrlProblem("https://localhost/feed") ?? "", /rede local/);
+  assert.match(feedUrlProblem("https://user:senha@feed.example/feed") ?? "", /usuário/);
+  assert.equal(feedUrlProblem("https://feed.example/ofertas.json"), null);
+  assert.match(feedAddressesProblem(["203.0.113.10", "10.0.0.8"]) ?? "", /rede local/);
+  assert.equal(feedAddressesProblem(["203.0.113.10"]), null);
 });
 
 test("JSON sem lista de ofertas é recusado", async () => {

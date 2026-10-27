@@ -22,15 +22,20 @@ Na mesma tela da loja:
 - **Molde do link** (quando a loja não aceita parâmetro simples): o endereço com `{url}` no lugar da oferta, por
   exemplo `https://go.rede.com/afiliado?url={url}`. O domínio do molde precisa estar na lista de domínios permitidos.
 
-A tela mostra qual dos dois está valendo. O link final é montado no servidor, no clique — a URL da oferta nunca vem do
-usuário, e o resultado é validado de novo antes do redirecionamento.
+A tela mostra qual dos dois está valendo, sem repetir a chave. Depois de salvar, o campo volta vazio de propósito:
+deixe em branco para manter, preencha só para trocar, ou marque remover. O link final é montado no servidor, no
+clique — a URL da oferta nunca vem do usuário, e o resultado é validado de novo antes do redirecionamento.
 
 ## 3. Cadastrar a fonte (feed do parceiro)
 
 `/admin/fontes` → **Conectar fonte por URL**.
 
-- **URL do feed**: `https://…` (o token, quando existir, vai na própria URL; a lista de fontes mostra só o host).
-- **Formato**: JSON, CSV ou detecção automática. O JSON pode ser uma lista ou `{ "items": [...] }` / `{ "data": [...] }`.
+- **URL do feed**: `https://…` (o token, quando existir, vai na própria URL; a lista de fontes mostra só o host, e a
+  auditoria também). Endereço local, IP privado ou nome que resolve para a rede interna é recusado. Deixar o campo
+  vazio numa fonte já cadastrada mantém a URL.
+- **Formato**: JSON, CSV, XML ou detecção automática. O JSON pode ser uma lista ou `{ "items": [...] }` /
+  `{ "data": [...] }`; o XML é lido como elementos repetidos dentro da raiz (`<item>`, `<produto>`, `<offer>`), com
+  CDATA e entidades (`&amp;`, `&ccedil;`).
 - **Mapa de campos**: uma linha por campo, `canonico=campo_na_fonte`. Exemplo:
 
   ```

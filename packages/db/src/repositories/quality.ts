@@ -1,7 +1,7 @@
 // Painel de qualidade (PRD §12.7): o que está publicado pela metade, oferta vencida, vínculo pendente, fonte
 // falhando e link fora do domínio permitido.
 
-import { isAllowedRedirect } from "@tako/domain";
+import { isAllowedRedirect, MAX_PRICE_CENTS } from "@tako/domain";
 import { query } from "../pool";
 import { toIso } from "../mappers";
 
@@ -21,6 +21,11 @@ export async function qualityIssues(now = new Date()): Promise<QualityIssue[]> {
     pendingMappings: number;
     staleOffers: number;
     sectionsExpiring: number;
+    unidentifiedPlatform: number;
+    unidentifiedEdition: number;
+    invalidPrices: number;
+    abnormalPrices: number;
+    unmappedProducts: number;
   }>(
     `select
       (select count(*)::int from games where published and not archived and (description is null or description = '')) as "withoutDescription",
@@ -31,8 +36,28 @@ export async function qualityIssues(now = new Date()): Promise<QualityIssue[]> {
       (select count(*)::int from offers o join sources s on s.id = o.source_id
         where o.observed_at < $1::timestamptz - make_interval(hours => s.max_age_hours)) as "staleOffers",
       (select count(*)::int from home_sections
-        where published and ends_at is not null and ends_at between $1::timestamptz and $1::timestamptz + interval '7 days') as "sectionsExpiring"`,
-    [now],
+        where published and ends_at is not null and ends_at between $1::timestamptz and $1::timestamptz + interval '7 days') as "sectionsExpiring",
+      (select count(*)::int from offers
+        where platform not in ('steam', 'epic', 'gog', 'xbox', 'other')) as "unidentifiedPlatform",
+      (select count(*)::int from products
+        where published and kind = 'edition' and (edition_name is null or edition_name = '')) as "unidentifiedEdition",
+      (select count(*)::int from offers
+        where price_cents > $2::bigint
+           or (reference_price_cents is not null and reference_price_cents < price_cents)) as "invalidPrices",
+      (select count(*)::int from offers o
+        where exists (
+          select 1 from price_observations prev
+          where prev.offer_id = o.id
+            and prev.observed_at < o.observed_at
+            and prev.observed_at = (
+              select max(older.observed_at) from price_observations older
+              where older.offer_id = o.id and older.observed_at < o.observed_at
+            )
+            and (o.price_cents * 5 < prev.price_cents or o.price_cents > prev.price_cents * 5)
+        )) as "abnormalPrices",
+      (select count(*)::int from external_products ep
+        where not exists (select 1 from product_mappings m where m.external_product_id = ep.id)) as "unmappedProducts"`,
+    [now, MAX_PRICE_CENTS],
   );
   const row = counts[0];
   const issues: QualityIssue[] = [];
@@ -74,6 +99,41 @@ export async function qualityIssues(now = new Date()): Promise<QualityIssue[]> {
     detail: "Preço mais velho que o prazo da fonte: não aparece como atual.",
     href: "/admin/fontes",
     count: row?.staleOffers ?? 0,
+  });
+  add({
+    kind: "sem-plataforma",
+    label: "Ofertas sem plataforma identificada",
+    detail: "A plataforma não é uma das conhecidas. Sem isso, a oferta pode ser comparada com o produto errado.",
+    href: "/admin/ofertas",
+    count: row?.unidentifiedPlatform ?? 0,
+  });
+  add({
+    kind: "sem-edicao",
+    label: "Edições publicadas sem nome",
+    detail: "Produto marcado como edição, sem o nome da edição. A comparação não sabe o que está vendendo.",
+    href: "/admin/jogos",
+    count: row?.unidentifiedEdition ?? 0,
+  });
+  add({
+    kind: "preco-invalido",
+    label: "Preços inválidos",
+    detail: "Referência abaixo do preço, ou valor acima do que ainda é um preço. Desconto inventado não aparece na loja.",
+    href: "/admin/ofertas",
+    count: row?.invalidPrices ?? 0,
+  });
+  add({
+    kind: "variacao-anormal",
+    label: "Variações anormais de preço",
+    detail: "O preço caiu para menos de um quinto do anterior, ou subiu mais de cinco vezes. Confira a fonte antes de confiar.",
+    href: "/admin/ofertas",
+    count: row?.abnormalPrices ?? 0,
+  });
+  add({
+    kind: "produto-sem-vinculo",
+    label: "Produtos de fonte sem vínculo",
+    detail: "Chegou da fonte e não entrou na fila de revisão. Sem vínculo, não vira oferta da loja.",
+    href: "/admin/vinculos",
+    count: row?.unmappedProducts ?? 0,
   });
   add({
     kind: "secao-expirando",

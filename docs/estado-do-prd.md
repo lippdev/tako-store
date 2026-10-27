@@ -93,6 +93,8 @@ o retrato da implementação e envelhece com ela.
 6. **Sessão com leitor de tela** — a auditoria de STO-006 conferiu semântica, rótulos, foco e contraste; falta a
    passagem com NVDA/VoiceOver.
 7. **Token `--text-dim`** — 3,02:1 no design system do launcher; a correção é lá (ADR-0001), não aqui.
+8. **Importação e alteração em lote do catálogo, rascunho da home com histórico** — o PRD pede (§12.2 e §12.4);
+   ainda não está no painel. Não bloqueia colar a chave de afiliado.
 
 ## Administração (§12) além do §20
 
@@ -105,3 +107,7 @@ o retrato da implementação e envelhece com ela.
 | Banners da home | ✅ | `/admin/home`: criar, publicar, ocultar e remover; a loja mostra até três com navegação por pontos |
 | Chave de afiliado | ✅ | `/admin/lojas`: parâmetro + valor ou molde com `{url}`, validado contra os domínios permitidos; cliques por oferta em `/admin/ofertas` |
 | Coleta contínua | ✅ | `npm run worker -- due` e `daemon`, respeitando `cadence_hours`; unidades em `deploy/systemd/` |
+| Segredos não reexibidos | ✅ | Chave e molde de afiliado não voltam ao formulário; campo vazio mantém; auditoria do feed guarda só o host |
+| Feed só em https público | ✅ | `assertPublicFeedUrl` recusa rede local, IP privado e redirecionamento interno |
+| Privacidade | ✅ | `/privacidade` e [privacidade.md](privacidade.md); `npm run worker -- retain` apaga clique, tentativa e log fora do prazo |
+| Desativar ofertas de fonte | ✅ | Botão em `/admin/fontes`: a oferta sai da comparação, o histórico fica |
