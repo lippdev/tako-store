@@ -67,7 +67,7 @@ describe("fonte canônica", () => {
     assert.equal(summary.accepted, 1);
     const game = await findGameBySlug("jogo-canonicoteste");
     assert.ok(game);
-    assert.equal(game?.published, false);
+    assert.equal(game?.published, true);
     assert.equal(game?.media.cover, "https://loja.example/capa.jpg");
     const products = await listProducts();
     const product = products.find((candidate) => candidate.gameId === game?.id);

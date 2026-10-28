@@ -2,7 +2,7 @@
 // oferta: preço inteiro, moeda e região informadas, URL https e plataforma conhecida.
 
 import { readFile } from "node:fs/promises";
-import type { ActivationPlatform, Availability } from "@tako/domain";
+import { OPERATING_SYSTEMS, type ActivationPlatform, type Availability, type OperatingSystem } from "@tako/domain";
 
 export const CONNECTOR_PLATFORMS: readonly ActivationPlatform[] = ["steam", "epic", "gog", "xbox", "other"];
 
@@ -31,6 +31,8 @@ export interface RawOffer {
   releaseDate?: string | null;
   /** Gêneros informados pela fonte. */
   genres?: string[];
+  /** Sistemas operacionais informados pela fonte. */
+  operatingSystems?: OperatingSystem[];
 }
 
 export interface RowError {
@@ -145,6 +147,10 @@ export function validateOfferRow(input: unknown, line: number | null): Validatio
       releaseDate: text("releaseDate") || null,
       genres: Array.isArray(row["genres"])
         ? row["genres"].filter((genre): genre is string => typeof genre === "string" && genre.trim() !== "")
+        : [],
+      operatingSystems: Array.isArray(row["operatingSystems"])
+        ? row["operatingSystems"].filter((system): system is OperatingSystem =>
+            (OPERATING_SYSTEMS as readonly string[]).includes(system as string))
         : [],
     },
   };

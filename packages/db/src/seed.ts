@@ -8,6 +8,7 @@ import {
   createAdminUser,
   migrate,
   query,
+  queryOne,
   startIngestionRun,
   finishIngestionRun,
   upsertBanner,
@@ -29,6 +30,19 @@ function hoursAgo(hours: number): Date {
 
 async function main(): Promise<void> {
   await migrate();
+  // O seed zera TUDO e recoloca o catálogo fictício. Dado real da Steam não pode morrer nisso: com dados reais
+  // presentes, o seed só roda com SEED_DEMO=1 explícito — o mesmo acordo do aviso de demonstração no rodapé.
+  const realData = await queryOne<{ n: number }>(
+    "select count(*)::int as n from external_products ep join sources s on s.id = ep.source_id where s.slug = 'steam'",
+  );
+  if ((realData?.n ?? 0) > 0 && process.env["SEED_DEMO"] !== "1") {
+    console.error(
+      `Este banco tem ${String(realData?.n ?? 0)} produto(s) real(is) da Steam. O seed de demonstração os apagaria.`,
+    );
+    console.error("Para zerar tudo e recolocar o catálogo fictício: SEED_DEMO=1 npm run db:seed");
+    process.exitCode = 1;
+    return;
+  }
   await query(`truncate table offer_clicks, price_observations, ingestion_errors, ingestion_runs, product_mappings,
     external_products, offers, products, external_identifiers, media_assets, games, admin_sessions, admin_users,
     audit_events, home_sections, home_banners, sources, stores restart identity cascade`);

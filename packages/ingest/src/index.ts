@@ -61,16 +61,19 @@ interface RowOutcome {
 /**
  * Cria o jogo e o produto base que a fonte oficial trouxe. Devolve o id do produto novo, ou `null` quando o
  * slug já pertence a um jogo com outro título — esse caso volta para a fila de revisão em vez de chutar.
+ * O jogo nasce publicado: fonte canônica é o registro oficial do jogo (pedido do mantenedor para o catálogo
+ * real); o editor oculta em lote quando quiser.
  */
-async function createGameFromSource(row: RawOffer): Promise<string | null> {
+async function createGameFromSource(cache: RunCache, row: RawOffer): Promise<string | null> {
   // Título sem letras latinas (japonês, coreano, chinês) não vira slug: usa o identificador da fonte.
   const base = slugify(row.title) || `jogo-${row.externalId.toLowerCase()}`;
   if (base === "") return null;
   let slug = base;
-  const existing = await findGameBySlug(slug);
+  const known = cache.games.find((game) => game.slug === slug);
+  const existing = known ?? await findGameBySlug(slug);
   if (existing !== null && foldText(existing.title) !== foldText(row.title)) {
     slug = `${base}-${row.externalId.toLowerCase()}`;
-    const alternative = await findGameBySlug(slug);
+    const alternative = cache.games.find((game) => game.slug === slug) ?? await findGameBySlug(slug);
     if (alternative !== null) return null;
   }
   const game = await upsertGame({
@@ -80,17 +83,25 @@ async function createGameFromSource(row: RawOffer): Promise<string | null> {
     description: row.description ?? null,
     genres: row.genres ?? [],
     platforms: [row.platform],
-    published: false,
+    published: true,
   });
   if (row.coverUrl !== null && row.coverUrl !== undefined && existing === null) {
     await updateGame(game.id, { coverUrl: row.coverUrl });
   }
   const product = await upsertProduct({ gameId: game.id, kind: "base", platform: row.platform });
+  cache.games = [game, ...cache.games];
+  cache.products = [product, ...cache.products];
   return product.id;
 }
 
+/** Catálogo lido uma vez por execução e atualizado quando a própria execução cria jogo. */
+interface RunCache {
+  games: Awaited<ReturnType<typeof listAllGames>>;
+  products: Awaited<ReturnType<typeof listProducts>>;
+}
+
 /** Grava uma linha já validada: produto externo, sugestão de vínculo, aprovação exata e oferta. */
-async function persistRow(source: Source, row: RawOffer): Promise<RowOutcome> {
+async function persistRow(cache: RunCache, source: Source, row: RawOffer): Promise<RowOutcome> {
   const store = await getStoreBySlug(row.storeSlug);
   if (store === null) {
     return {
@@ -111,8 +122,7 @@ async function persistRow(source: Source, row: RawOffer): Promise<RowOutcome> {
     currency: row.currency,
   });
 
-  const [games, products] = await Promise.all([listAllGames(), listProducts()]);
-  const suggestion = suggestProduct(row, games, products);
+  const suggestion = suggestProduct(row, cache.games, cache.products);
   await suggestMapping({
     externalProductId,
     productId: suggestion.productId,
@@ -133,7 +143,7 @@ async function persistRow(source: Source, row: RawOffer): Promise<RowOutcome> {
   // Fonte canônica do jogo (fonte oficial da própria vitrine): o que ainda não existe no catálogo nasce da
   // própria fonte, oculto até o editor publicar. Jogo que pode já existir com outro título continua na fila.
   if (suggestion.productId === null && source.autoCreate) {
-    const created = await createGameFromSource(row);
+    const created = await createGameFromSource(cache, row);
     if (created !== null) {
       await autoApproveMapping({
         externalProductId,
@@ -190,8 +200,12 @@ export async function importCollected(source: Source, collected: ConnectorOutput
 
   let accepted = 0;
   let linked = 0;
+  // O catálogo entra na memória uma vez por execução: importar milhares de linhas não pode recarregar o
+  // banco inteiro por linha.
+  const [games, products] = await Promise.all([listAllGames(), listProducts()]);
+  const cache: RunCache = { games, products };
   for (const row of collected.rows) {
-    const outcome = await persistRow(source, row);
+    const outcome = await persistRow(cache, source, row);
     if (outcome.accepted) {
       accepted += 1;
       if (outcome.linked) linked += 1;
@@ -255,6 +269,8 @@ export async function retryFailedRun(runId: string, actor: string): Promise<RunS
   const errors: ImportedError[] = [];
   let accepted = 0;
   let linked = 0;
+  const [games, products] = await Promise.all([listAllGames(), listProducts()]);
+  const cache: RunCache = { games, products };
 
   for (const error of retried) {
     const validation = validateOfferRow(error.payload, error.line);
@@ -268,7 +284,7 @@ export async function retryFailedRun(runId: string, actor: string): Promise<RunS
       errors.push({ line: validation.error.line, code: validation.error.code, message: validation.error.message });
       continue;
     }
-    const outcome = await persistRow(source, {
+    const outcome = await persistRow(cache, source, {
       ...validation.row,
       observedAt: validation.row.observedAt ?? new Date().toISOString(),
     });
