@@ -122,8 +122,10 @@ autorizado não há oferta real, e sem BRL a oferta não entra na comparação d
 | **Eneba** | Feed XML/CSV para afiliados aprovados | BRL na loja BR | Aprovação no programa de afiliados; a API GraphQL é só para merchants |
 | **Green Man Gaming** | Catálogo por API para Business Affiliate (direto ou via Admitad) | BRL na loja BR | Aprovação no Business Affiliate Program |
 | **Gamivo** | Feed XML sob pedido (`affiliate@gamivo.com`) | BRL na loja BR | Aprovação no programa de afiliados |
-| **Fanatical** | MCP oficial público, sem autenticação, com `steam_id` | USD para BR | Nada — mas sem BRL não entra na comparação do Brasil |
-| **CDKeys / Instant Gaming** | Nada oficial (só raspagem de terceiros) | — | Fora: raspagem não é acesso autorizado (PRD §9) |
+| **Fanatical** | MCP oficial público, sem autenticação, com `steam_id`; feed de afiliados existe (`feed.fanatical.com`, chave por e-mail); programa de afiliados via CJ (sites) e Tapfiliate (canais) | USD para BR | Chave do feed: `affiliates@fanatical.com`; sem BRL não entra na comparação do Brasil |
+| **CDKeys (Loaded)** | Programa de afiliados próprio com **feed de dados de todo o catálogo para comparadores de preço** (`loaded.com/affiliate-program`); também via Awin e Admitad | BRL a confirmar | Aprovação no programa (`affiliates@loaded.com`); feed vem depois da aprovação |
+| **Instant Gaming** | Programa de indicação no próprio site (link de referência); na Admitad via Mitgame (UK/PL/PT); sem API nem feed público | BRL na loja BR | Cadastro no programa do site e na Admitad; cobertura em BRL a confirmar |
+| **GOG** | Programa de afiliados próprio (`affiliate.gog.com`, 6%); endpoint público de catálogo é USD-only | BRL na loja BR | Cadastro no programa próprio (ou CJ/Adtraction); cobertura em BRL do feed a confirmar |
 
 Quando uma dessas aprovar o cadastro, o caminho não muda: feed por URL em `/admin/fontes` (o importador já lê
 XML, CSV e JSON) ou conector próprio no molde do da Steam.

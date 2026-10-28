@@ -300,9 +300,10 @@ A arquitetura deve permitir combinar diferentes tipos de fonte, mas uma integra�
 | **Green Man Gaming** | O programa Business Affiliate expõe API de catálogo (7.000+ jogos), direto ou via Admitad. | Buscar aprovação no programa e validar cobertura em BRL, frequência e regras de link. |
 | **Gamivo** | Envia feed XML para comparadores de preço sob pedido (`affiliate@gamivo.com`), após aprovação no programa de afiliados. | Buscar aprovação e cadastrar o feed em `/admin/fontes`. |
 | **Eneba** | Entrega feed XML/CSV após aprovação no programa de afiliados; a API GraphQL é restrita a merchants. | Buscar aprovação no programa de afiliados e validar o feed. |
-| **Fanatical** | Possui MCP oficial público, sem autenticação, testado ao vivo; para a região BR devolve preços em USD. | Sem BRL não entra na comparação do Brasil; reavaliar se passar a servir real. |
-| **Instant Gaming** | Sem API oficial; só raspagem de terceiros, que fica de fora (regra deste PRD). O caminho planejado é o coletor de anunciantes (PAR-005). | Escolher os canais de anunciantes quando PAR-005 entrar. |
-| **CDKeys** | Sem API oficial; só raspagem de terceiros, que fica de fora (regra deste PRD). O caminho planejado é o coletor de anunciantes (PAR-005). | Escolher os canais de anunciantes quando PAR-005 entrar. |
+| **Fanatical** | Possui MCP oficial público, testado ao vivo (USD para a região BR), feed de afiliados com chave (`feed.fanatical.com`) e programa de afiliados via CJ. | Pedir a chave do feed a `affiliates@fanatical.com`; sem BRL não entra na comparação do Brasil; reavaliar se passar a servir real. |
+| **CDKeys (Loaded)** | Possui programa de afiliados próprio com feed de dados de todo o catálogo, voltado a comparadores de preço; também listada na Awin e na Admitad. | Buscar aprovação no programa (`affiliates@loaded.com`) e validar cobertura em BRL; feed após aprovação. |
+| **Instant Gaming** | Sem API nem feed público; tem programa de indicação no próprio site e caminho pela Admitad (Mitgame, UK/PL/PT). O caminho planejado é o coletor de anunciantes (PAR-005). | Cadastrar-se no programa do site e na Admitad; escolher os canais de anunciantes quando PAR-005 entrar. |
+| **GOG** | Possui programa de afiliados próprio (`affiliate.gog.com`, 6%); o endpoint público de catálogo serve apenas USD. | Cadastrar-se no programa próprio; confirmar cobertura em BRL de feed ou API antes de integrar. |
 | **IsThereAnyDeal** | Possui API de preços, mas seus termos restringem aplicações que possam ser consideradas concorrentes e proíbem alterar dados e tags de afiliado. | Não usar como base da Tako Store sem autorização explícita. [Documentação e termos](https://docs.isthereanydeal.com/) |
 | **GG.deals** | Possui API e informa condições próprias para uso comercial, atribuição e preservação de links. | Avaliar cobertura brasileira, custos, condições e compatibilidade. [API e termos](https://gg.deals/api/) |
 | **CheapShark** | Possui API de jogos e ofertas e utiliza redirecionamento próprio em sua documentação. | Validar cobertura em BRL, parceiros, termos e links antes de usar. [Documentação oficial](https://www.postman.com/cheapshark/cheapshark-s-public-workspace/documentation/7h22uhl/cheapshark-api) |
@@ -320,10 +321,10 @@ O mapa técnico completo de cada loja (o que fornece, moeda e o que destrava) es
 
 ### Coletor de anunciantes para lojas sem API (Telegram e similares)
 
-Para lojas sem caminho oficial — Instant Gaming e CDKeys, hoje — a coleta não raspa a loja: acompanha os
-próprios anunciantes (vendedores que publicam as ofertas deles, por exemplo em canais de Telegram) e converte
-o anúncio em oferta estruturada. O coletor, além de puxar, adapta o link ao modelo de afiliado cadastrado e
-alimenta a loja como qualquer outra fonte.
+Para lojas sem caminho oficial — Instant Gaming, hoje, e qualquer outra enquanto o feed não sai — a coleta não
+raspa a loja: acompanha os próprios anunciantes (vendedores que publicam as ofertas deles, por exemplo em canais
+de Telegram) e converte o anúncio em oferta estruturada. O coletor, além de puxar, adapta o link ao modelo de
+afiliado cadastrado e alimenta a loja como qualquer outra fonte.
 
 Regras do coletor, todas obrigatórias:
 
