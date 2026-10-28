@@ -1,6 +1,6 @@
 // Catálogo: leitura para a loja e escrita para o painel. As consultas devolvem tipos do domínio, já mapeados.
 
-import type { ActivationPlatform, CatalogEntry, Game, OperatingSystem, Product, ProductKind } from "@tako/domain";
+import type { ActivationPlatform, BulkChange, CatalogEntry, Game, OperatingSystem, Product, ProductKind } from "@tako/domain";
 import { query, queryOne, getPool } from "../pool";
 import { toGame, toProduct, type GameRow, type ProductRow } from "../mappers";
 
@@ -225,6 +225,26 @@ export async function setGameVisibility(
      where id = $1`,
     [id, change.published ?? null, change.archived ?? null],
   );
+}
+
+/** Alteração em lote (PRD §12.2): a mesma escrita de visibilidade, para os jogos que a prévia escolheu. */
+export async function applyBulkVisibility(
+  ids: readonly string[],
+  change: BulkChange,
+): Promise<number> {
+  if (ids.length === 0) return 0;
+  const rows = await query<{ id: string }>(
+    `update games set
+       published = coalesce($2::boolean, published),
+       archived = coalesce($3::boolean, archived),
+       updated_at = now()
+     where id = any($1::uuid[])
+       and (($2::boolean is not null and $2::boolean is distinct from published)
+         or ($3::boolean is not null and $3::boolean is distinct from archived))
+     returning id`,
+    [ids, change.published ?? null, change.archived ?? null],
+  );
+  return rows.length;
 }
 
 export async function listProducts(options: { publishedOnly?: boolean } = {}): Promise<Product[]> {
