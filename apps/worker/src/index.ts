@@ -11,7 +11,7 @@
 // O agendador respeita `cadence_hours` de cada fonte: coleta a que está devida, registra a execução e volta a dormir.
 // Ele não substitui um supervisor de processo (systemd, container restart), só dispensa um cron por fonte.
 
-import { connectorFor } from "@tako/connectors";
+import { connectorFor, steamCrawl } from "@tako/connectors";
 import {
   applyRetention,
   closePool,
@@ -20,7 +20,7 @@ import {
   listIngestionRuns,
   listSources,
 } from "@tako/db";
-import { importSource, retryFailedRun, sourceCanCollect, type RunSummary } from "@tako/ingest";
+import { importCollected, importSource, retryFailedRun, sourceCanCollect, type RunSummary } from "@tako/ingest";
 
 interface Args {
   command: string;
@@ -30,6 +30,7 @@ interface Args {
   limit?: number;
   interval?: number;
   once?: boolean;
+  topo?: number;
 }
 
 function parseArgs(argv: string[]): Args {
@@ -40,6 +41,9 @@ function parseArgs(argv: string[]): Args {
     const next = rest[index + 1];
     if (token === "--source" && next !== undefined) {
       args.source = next;
+    }
+    if (token === "--topo" && next !== undefined) {
+      args.topo = Number(next);
       index += 1;
     } else if (token === "--file" && next !== undefined) {
       args.file = next;
@@ -94,6 +98,19 @@ async function retain(): Promise<void> {
   console.log(
     `Retenção: ${String(result.loginAttempts)} tentativa(s), ${String(result.clicks)} clique(s), ${String(result.resolvedErrors)} erro(s) resolvido(s), ${String(result.auditEvents)} auditoria(s).`,
   );
+}
+
+/** Rastreador da Steam: o catálogo cresce a cada execução, em ritmo do limite da vitrine. */
+async function crawlOne(slug: string, topo: number): Promise<void> {
+  if (slug !== "steam") throw new Error(`rastreador ainda só para steam (pediu "${slug}")`);
+  const source = await getSourceBySlug(slug);
+  if (source === null) throw new Error(`fonte "${slug}" não existe no banco`);
+  console.log(`Rastreador da Steam: até ${String(topo)} apps da lista de prioridade.`);
+  const collected = await steamCrawl({ topo, sourceId: source.id });
+  const summary = await importCollected(source, collected, "rastreador");
+  console.log(`Fonte ${source.name}`);
+  printSummary(summary);
+  await closePool();
 }
 
 /** Uma passada: cada fonte devida é coletada uma vez, em série; falha de uma não impede as outras. */
@@ -154,6 +171,10 @@ async function main(): Promise<void> {
     case "import":
       if (args.source === undefined) throw new Error("use --source <slug>");
       await importOne(args.source, args.file);
+      return;
+    case "crawl":
+      if (args.source === undefined) throw new Error("use --source steam");
+      await crawlOne(args.source, args.topo ?? 300);
       return;
     case "retry":
       if (args.run === undefined) throw new Error("informe a execução com --run <id>");
