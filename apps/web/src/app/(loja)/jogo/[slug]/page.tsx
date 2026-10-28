@@ -28,7 +28,12 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
     openGraph: {
       title: game.title,
       description,
-      images: game.media.hero === null ? [] : [{ url: game.media.hero }],
+      images:
+        game.media.hero === null
+          ? game.media.cover === null
+            ? []
+            : [{ url: game.media.cover }]
+          : [{ url: game.media.hero }],
       type: "website",
     },
   };
