@@ -1,6 +1,6 @@
 // Conector da Steam (OFR-008): API pública da vitrine, preços na região do Brasil em BRL. O dado é da própria
 // origem — destaque, mais vendidos, ofertas e lançamentos chegam com preço, desconto e capa oficiais. A coleta é
-// um pedido só; o catálogo cresce a cada execução e o jogo criado nasce oculto para o editor publicar.
+// um pedido só; o catálogo cresce a cada execução e o jogo criado nasce publicado — esconder em lote é do painel.
 
 import type { ConnectorOutput, Connector, CollectInput, RawOffer, RowError } from "./connector";
 import { validateOfferRow } from "./connector";
@@ -33,7 +33,7 @@ export const steamConnector: Connector & { collect: (input: CollectInput) => Pro
   limits: "1 requisição por coleta (featuredcategories). A vitrine não publica preço de tudo em lista; o catálogo cresce a cada execução pelos destaques. Sem chave.",
   linkRules: "Link canônico da página do app (store.steampowered.com/app/<id>). Atribuição: dados de preço e disponibilidade da Steam.",
   notes:
-    "API pública da vitrine (featuredcategories), sem contrato de parceiro. Termos de uso comerciais precisam de confirmação antes do lançamento público (OPS-003). Jogo criado da fonte nasce oculto.",
+    "API pública da vitrine (featuredcategories), sem contrato de parceiro. Termos de uso comerciais precisam de confirmação antes do lançamento público (OPS-003). Jogo criado da fonte nasce publicado; capa no formato 2:3 da biblioteca com a da vitrine de reserva.",
   async collect({ now }: CollectInput): Promise<ConnectorOutput> {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 20_000);
@@ -66,7 +66,11 @@ export const steamConnector: Connector & { collect: (input: CollectInput) => Pro
       }
       const validated = validateOfferRow(steamRow(item, observedAt), null);
       if (validated.ok) {
-        rows.push({ ...validated.row, observedAt });
+        rows.push({
+          ...validated.row,
+          observedAt,
+          coverUrl: await capaNoFormatoDoCartao(item.id, validated.row["coverUrl"] as string | null),
+        });
       } else {
         // Item sem preço (gratuito, em breve) fica de fora com o motivo: nada entra pela metade.
         errors.push({ ...validated.error, code: validated.error.code === "preco" ? "sem-preco" : validated.error.code });
@@ -102,6 +106,26 @@ export function steamFeaturedItems(payload: unknown): SteamFeaturedItem[] {
     }
   }
   return items;
+}
+
+/** Capa retrata 600×900 (2:3) da biblioteca: o formato dos cartões da loja. Nem todo app tem a peça. */
+export function capaDeBiblioteca(appid: number | string): string {
+  return `https://steamcdn-a.akamaihd.net/steam/apps/${String(appid)}/library_600x900.jpg`;
+}
+
+async function existeNoCdn(url: string): Promise<boolean> {
+  try {
+    const response = await fetch(url, { method: "HEAD", signal: AbortSignal.timeout(5_000) });
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
+
+/** Capa no formato do cartão (2:3 retrato): a da biblioteca quando existe; a paisagem da vitrine fica de reserva. */
+export async function capaNoFormatoDoCartao(appid: number | string, reserva: string | null): Promise<string | null> {
+  const biblioteca = capaDeBiblioteca(appid);
+  return (await existeNoCdn(biblioteca)) ? biblioteca : reserva;
 }
 
 /** Item da vitrine na forma que o validador entende. Moeda fora do BRL e preço zero são recusados no validador. */
@@ -203,7 +227,10 @@ export async function steamAppDetails(
       referencePriceCents: initial !== null && initial > price ? initial : null,
       url: `https://store.steampowered.com/app/${String(appid)}/`,
       storeSlug: "steam",
-      coverUrl: typeof app["header_image"] === "string" ? app["header_image"] : null,
+      coverUrl: await capaNoFormatoDoCartao(
+        appid,
+        typeof app["header_image"] === "string" ? app["header_image"] : null,
+      ),
       description: typeof app["short_description"] === "string" ? stripHtml(app["short_description"]) : null,
       genres,
       operatingSystems: sistemas,
