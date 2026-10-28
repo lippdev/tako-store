@@ -1,6 +1,13 @@
 import Link from "next/link";
 import { listAllGames } from "@tako/db";
-import { criarJogo, exportarCatalogo, preverImportacaoCatalogo, publicarJogo } from "../../actions";
+import {
+  BULK_ACTION_LABELS,
+  BULK_FILTER_LABELS,
+  gamesAffectedByBulk,
+  isBulkFilter,
+  matchesBulkFilter,
+} from "@tako/domain";
+import { aplicarLote, criarJogo, exportarCatalogo, preverImportacaoCatalogo, publicarJogo } from "../../actions";
 import styles from "../../admin.module.css";
 
 export const dynamic = "force-dynamic";
@@ -9,17 +16,12 @@ export const dynamic = "force-dynamic";
 export default async function JogosPage({
   searchParams,
 }: {
-  searchParams: Promise<{ ok?: string; filtro?: string; erro?: string; slug?: string; jogos?: string }>;
+  searchParams: Promise<{ ok?: string; filtro?: string; erro?: string; slug?: string; jogos?: string; acao?: string }>;
 }) {
-  const { ok, filtro, erro, slug, jogos } = await searchParams;
+  const { ok, filtro, erro, slug, jogos, acao } = await searchParams;
   const games = await listAllGames();
-  const filtered = games.filter((game) => {
-    if (filtro === "publicados") return game.published;
-    if (filtro === "ocultos") return !game.published;
-    if (filtro === "sem-capa") return game.published && game.media.cover === null;
-    if (filtro === "sem-descricao") return game.published && (game.description === null || game.description === "");
-    return true;
-  });
+  const filtroAtivo = isBulkFilter(filtro) ? filtro : undefined;
+  const filtered = filtroAtivo === undefined ? games : games.filter((game) => matchesBulkFilter(game, filtroAtivo));
 
   return (
     <>
@@ -29,12 +31,16 @@ export default async function JogosPage({
           <p>{filtered.length} de {games.length} jogos</p>
         </div>
         <div className={styles["actions"]}>
-          <Link className={styles["secondary"]} href="/admin/jogos?filtro=publicados" style={{ padding: "9px 14px", textDecoration: "none" }}>
-            Publicados
-          </Link>
-          <Link className={styles["secondary"]} href="/admin/jogos?filtro=ocultos" style={{ padding: "9px 14px", textDecoration: "none" }}>
-            Ocultos
-          </Link>
+          {Object.entries(BULK_FILTER_LABELS).map(([value, label]) => (
+            <Link
+              key={value}
+              className={styles["secondary"]}
+              href={`/admin/jogos?filtro=${value}`}
+              style={{ padding: "9px 14px", textDecoration: "none" }}
+            >
+              {label}
+            </Link>
+          ))}
           <Link className={styles["secondary"]} href="/admin/jogos" style={{ padding: "9px 14px", textDecoration: "none" }}>
             Todos
           </Link>
@@ -43,7 +49,18 @@ export default async function JogosPage({
       {ok === "importado" && (
         <div className={styles["ok"]}>Importados {jogos ?? "0"} jogo(s). Imagens e ofertas não mudaram.</div>
       )}
-      {ok !== undefined && ok !== "importado" && <div className={styles["ok"]}>Alteração registrada.</div>}
+      {ok === "lote" && (
+        <div className={styles["ok"]}>
+          Em lote ({acao ?? "ação"}): {jogos ?? "0"} jogo(s) atualizado(s).
+        </div>
+      )}
+      {ok === "lote-vazio" && (
+        <div className={styles["ok"]}>Nenhum jogo mudou: o conjunto já estava como a ação deixaria.</div>
+      )}
+      {ok !== undefined && ok !== "importado" && ok !== "lote" && ok !== "lote-vazio" && (
+        <div className={styles["ok"]}>Alteração registrada.</div>
+      )}
+      {erro === "lote" && <div className={styles["error"]}>Ação de lote desconhecida.</div>}
       {erro === "arquivo" && <div className={styles["error"]}>Escolha um arquivo de catálogo.</div>}
       {erro === "arquivo-grande" && <div className={styles["error"]}>O arquivo passa de 5 MB. Divida o catálogo.</div>}
       {erro === "arquivo-invalido" && (
@@ -167,6 +184,42 @@ export default async function JogosPage({
           </tbody>
         </table>
         {filtered.length === 0 && <p className={styles["muted"]}>Nenhum jogo com esse filtro.</p>}
+      </section>
+
+      <section className={styles["card"]}>
+        <h2>Alteração em lote</h2>
+        <p className={styles["muted"]}>
+          Aplica uma ação em tudo que o filtro escolheu. A prévia mostra exatamente quais jogos mudam antes de gravar —
+          jogo que já está como a ação deixaria não entra.
+        </p>
+        {filtroAtivo === undefined ? (
+          <p className={styles["muted"]}>Escolha um filtro em cima para definir o conjunto do lote.</p>
+        ) : (
+          <>
+            <p className={styles["muted"]}>
+              Conjunto: <strong>{BULK_FILTER_LABELS[filtroAtivo]}</strong> — {filtered.length} jogo(s).
+            </p>
+            <div className={styles["actions"]}>
+              {(["publicar", "ocultar", "arquivar", "restaurar"] as const).map((acao) => {
+                const alvo = gamesAffectedByBulk(games, filtroAtivo, acao);
+                return (
+                  <form action={aplicarLote} key={acao}>
+                    <input type="hidden" name="filtro" value={filtroAtivo} />
+                    <input type="hidden" name="acao" value={acao} />
+                    <button
+                      type="submit"
+                      className={styles["secondary"]}
+                      disabled={alvo.length === 0}
+                      title={alvo.length === 0 ? "Nenhum jogo muda com esta ação" : undefined}
+                    >
+                      {BULK_ACTION_LABELS[acao]} ({String(alvo.length)})
+                    </button>
+                  </form>
+                );
+              })}
+            </div>
+          </>
+        )}
       </section>
     </>
   );
