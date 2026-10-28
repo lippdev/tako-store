@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { steamConnector, steamFeaturedItems, steamRow } from "../src/steam";
+import { capaDeBiblioteca, steamConnector, steamFeaturedItems, steamRow } from "../src/steam";
 
 const FEATURED = {
   top_sellers: {
@@ -86,6 +86,40 @@ test("falha da Steam vira erro com mensagem, não exceção crua", async () => {
   globalThis.fetch = (async () => new Response("fora do ar", { status: 503 })) as typeof fetch;
   try {
     await assert.rejects(() => steamConnector.collect({}), /503/);
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+test("capa do cartão vem da biblioteca (2:3) quando a peça existe", async () => {
+  const original = globalThis.fetch;
+  globalThis.fetch = (async (_url, init) =>
+    init?.method === "HEAD"
+      ? new Response(null, { status: 200 })
+      : new Response(JSON.stringify(FEATURED), { status: 200, headers: { "content-type": "application/json" } })) as typeof fetch;
+  try {
+    const result = await steamConnector.collect({ now: new Date("2026-10-28T12:00:00.000Z") });
+    assert.equal(
+      result.rows.find((row) => row.externalId === "4115450")?.coverUrl,
+      capaDeBiblioteca(4115450),
+    );
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+test("sem arte de biblioteca, a capa é a da vitrine", async () => {
+  const original = globalThis.fetch;
+  globalThis.fetch = (async (_url, init) =>
+    init?.method === "HEAD"
+      ? new Response(null, { status: 404 })
+      : new Response(JSON.stringify(FEATURED), { status: 200, headers: { "content-type": "application/json" } })) as typeof fetch;
+  try {
+    const result = await steamConnector.collect({ now: new Date("2026-10-28T12:00:00.000Z") });
+    assert.equal(
+      result.rows.find((row) => row.externalId === "4115450")?.coverUrl,
+      "https://shared.akamai.steamstatic.com/header.jpg",
+    );
   } finally {
     globalThis.fetch = original;
   }
