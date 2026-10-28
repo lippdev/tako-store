@@ -56,6 +56,7 @@ import {
   verifyUserTotp,
 } from "@tako/db";
 import {
+  ACTIVATION_PLATFORMS,
   bulkChange,
   gamesAffectedByBulk,
   isAffiliateParam,
@@ -69,6 +70,7 @@ import {
   serializeCatalogFile,
   slugify,
   templateDomain,
+  type ActivationPlatform,
   type HomeRule,
   type MediaKind,
 } from "@tako/domain";
@@ -172,7 +174,23 @@ export async function decidirVinculo(form: FormData): Promise<void> {
   const user = await requirePermission("mappings:write");
   const id = text(form, "id");
   const decision = text(form, "decisao");
-  const productId = optional(form, "produtoId");
+  let productId = optional(form, "produtoId");
+  // O vínculo pode apontar para um produto que a Tako ainda não tem (PRD §12.3): o jogo escolhido
+  // no campo "novo produto" nasce com o produto da edição e plataforma informadas pela fonte.
+  const novoJogoId = optional(form, "novoJogoId");
+  const novoTipo = text(form, "novoTipo");
+  if (decision === "aprovar" && productId === null && novoJogoId !== null) {
+    const platform = ACTIVATION_PLATFORMS.includes(text(form, "novoPlataforma") as ActivationPlatform)
+      ? (text(form, "novoPlataforma") as ActivationPlatform)
+      : "other";
+    const product = await upsertProduct({
+      gameId: novoJogoId,
+      kind: novoTipo === "edition" || novoTipo === "dlc" || novoTipo === "bundle" ? novoTipo : "base",
+      editionName: optional(form, "novoEdicao"),
+      platform,
+    });
+    productId = product.id;
+  }
   if (decision === "aprovar") {
     await decideMapping({ id, status: "approved", productId, decidedBy: user.email });
   } else if (decision === "rejeitar") {
@@ -814,4 +832,27 @@ export async function aplicarLote(form: FormData): Promise<void> {
     detail: { filtro, jogos: applied },
   });
   redirect(`/admin/jogos?filtro=${filtro}&ok=lote&jogos=${String(applied)}&acao=${acao}`);
+}
+
+/** Vínculos em lote (PRD §12.3): a mesma decisão para todo vínculo marcado com "lote" na fila. */
+export async function vinculosEmLote(form: FormData): Promise<void> {
+  const user = await requirePermission("mappings:write");
+  const decision = text(form, "decisao");
+  const ids = form.getAll("marcado").map(String);
+  if (ids.length === 0) redirect("/admin/vinculos?ok=1");
+  for (const id of ids) {
+    if (decision === "aprovar") {
+      await decideMapping({ id, status: "approved", productId: null, decidedBy: user.email });
+    } else {
+      await decideMapping({ id, status: "rejected", productId: null, decidedBy: user.email });
+    }
+  }
+  await writeAudit({
+    actor: user,
+    action: `vinculo:lote-${decision}`,
+    entity: "product_mapping",
+    entityId: null,
+    detail: { marcados: ids.length, decisao: decision },
+  });
+  redirect(`/admin/vinculos?ok=lote&lote=${String(ids.length)}`);
 }
