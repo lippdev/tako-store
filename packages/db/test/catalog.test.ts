@@ -18,8 +18,9 @@ import {
   upsertProduct,
   upsertSource,
   upsertStore,
+  type OfferInput,
 } from "../src/index";
-import type { Game, Offer, OfferInput, Source, Store } from "@tako/domain";
+import type { Game, Offer, Source, Store } from "@tako/domain";
 import { cheapestOffer, discountPercent, type EligibilityContext } from "@tako/domain";
 
 let online = false;
