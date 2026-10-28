@@ -120,3 +120,199 @@ export function steamRow(item: SteamFeaturedItem, observedAt: string): Record<st
     observedAt,
   };
 }
+
+/** Pausa entre pedidos de appdetails: o limite da vitrine é ~200 por 5 minutos. */
+const STEAM_CRAWL_DELAY_MS = 1_500;
+
+/** Texto sem as tags HTML da descrição da vitrine. */
+function stripHtml(html: string): string {
+  return html
+    .replace(/<[^>]*>/g, " ")
+    .replace(/&quot;/g, '"')
+    .replace(/&amp;/g, "&")
+    .replace(/&#39;/g, "'")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/** App oficial da vitrine: preço em BRL, capa, descrição e gêneros. `null` quando o app não tem página de loja. */
+export async function steamAppDetails(
+  appid: number,
+): Promise<{ ok: true; row: Record<string, unknown> } | { ok: false; code: string; message: string }> {
+  let parsed: unknown;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 15_000);
+  try {
+    const response = await fetch(
+      `https://store.steampowered.com/api/appdetails?appids=${String(appid)}&cc=br&l=brazilian`,
+      { signal: controller.signal, headers: { accept: "application/json", "user-agent": "TakoStore/1.0 (+https://github.com/lippdev/tako-store)" } },
+    );
+    if (response.status === 429 || response.status === 403) return { ok: false, code: "limite", message: `a Steam pediu espera (${String(response.status)})` };
+    if (!response.ok) return { ok: false, code: "resposta", message: `a Steam respondeu ${String(response.status)}` };
+    parsed = await response.json();
+  } catch (error) {
+    return { ok: false, code: "rede", message: error instanceof Error ? error.message : String(error) };
+  } finally {
+    clearTimeout(timeout);
+  }
+  const entry =
+    typeof parsed === "object" && parsed !== null
+      ? (parsed as Record<string, Record<string, unknown>>)[String(appid)]
+      : undefined;
+  const data = entry?.["data"];
+  if (entry?.["success"] !== true || typeof data !== "object" || data === null) {
+    return { ok: false, code: "indisponivel", message: `app ${String(appid)} não tem página de loja` };
+  }
+  const app = data as Record<string, unknown>;
+  if (app["type"] !== "game") {
+    return { ok: false, code: "nao-jogo", message: `app ${String(appid)} não é um jogo (${String(app["type"] ?? "?")})` };
+  }
+  const overview = typeof app["price_overview"] === "object" && app["price_overview"] !== null
+    ? (app["price_overview"] as Record<string, unknown>)
+    : null;
+  const price = typeof overview?.["final"] === "number" ? overview["final"] : null;
+  if (price === null || price <= 0) {
+    return { ok: false, code: "gratuito", message: `${String(app["name"] ?? appid)} é gratuito ou não tem preço na região` };
+  }
+  if (overview?.["currency"] !== "BRL") {
+    return { ok: false, code: "moeda", message: `preço veio em ${String(overview?.["currency"] ?? "?")}, não em BRL` };
+  }
+  const initial = typeof overview?.["initial"] === "number" ? overview["initial"] : null;
+  const genres = Array.isArray(app["genres"])
+    ? app["genres"]
+        .map((genre) => (typeof genre === "object" && genre !== null ? (genre as Record<string, unknown>)["description"] : null))
+        .filter((genre): genre is string => typeof genre === "string")
+    : [];
+  const platforms = typeof app["platforms"] === "object" && app["platforms"] !== null
+    ? (app["platforms"] as Record<string, unknown>)
+    : {};
+  const sistemas = Object.entries(platforms)
+    .filter(([, value]) => value === true)
+    .map(([system]) => ({ windows: "windows", mac: "macos", linux: "linux" })[system] ?? system)
+    .filter((system): system is string => typeof system === "string");
+
+  return {
+    ok: true,
+    row: {
+      externalId: String(appid),
+      title: app["name"],
+      platform: "steam",
+      region: "BR",
+      currency: "BRL",
+      priceCents: price,
+      referencePriceCents: initial !== null && initial > price ? initial : null,
+      url: `https://store.steampowered.com/app/${String(appid)}/`,
+      storeSlug: "steam",
+      coverUrl: typeof app["header_image"] === "string" ? app["header_image"] : null,
+      description: typeof app["short_description"] === "string" ? stripHtml(app["short_description"]) : null,
+      genres,
+      operatingSystems: sistemas,
+      observedAt: new Date().toISOString(),
+    },
+  };
+}
+
+/**
+ * Prioridade de rastreio (sem chave): os 100 mais populares em três listas do SteamSpy, seguidos dos mil
+ * com maior estimativa de donos do `all`, do mais possuído para o menos.
+ */
+export async function steamSpyTopAppids(): Promise<number[]> {
+  const requests = ["top100forever", "top100in2weeks", "top100owned"];
+  const lists = await Promise.all(
+    requests.map(async (request) => {
+      try {
+        const response = await fetch(`https://steamspy.com/api.php?request=${request}`, {
+          headers: { accept: "application/json" },
+        });
+        if (!response.ok) return {};
+        return (await response.json()) as Record<string, Record<string, unknown>>;
+      } catch {
+        return {};
+      }
+    }),
+  );
+  const ids: number[] = [];
+  const push = (id: unknown) => {
+    const number = typeof id === "number" ? id : Number(id);
+    if (Number.isSafeInteger(number) && number > 0 && !ids.includes(number)) ids.push(number);
+  };
+  for (const list of lists) {
+    for (const key of Object.keys(list)) push(key);
+  }
+
+  const all = await fetchSteamSpyAll();
+  const byOwners = [...all.entries()]
+    .sort((a, b) => ownersLowerBound(b[1]) - ownersLowerBound(a[1]))
+    .map(([appid]) => appid);
+  for (const appid of byOwners) push(appid);
+  return ids;
+}
+
+function fetchSteamSpyAll(): Promise<Map<number, Record<string, unknown>>> {
+  return fetch("https://steamspy.com/api.php?request=all", { headers: { accept: "application/json" } })
+    .then(async (response) => {
+      if (!response.ok) return new Map();
+      const parsed = (await response.json()) as Record<string, Record<string, unknown>>;
+      const map = new Map<number, Record<string, unknown>>();
+      for (const [key, value] of Object.entries(parsed)) {
+        const appid = Number(key);
+        if (Number.isSafeInteger(appid) && appid > 0) map.set(appid, value);
+      }
+      return map;
+    })
+    .catch(() => new Map<number, Record<string, unknown>>());
+}
+
+/** Extremo inferior da estimativa de donos ("1,000,000-2,000,000" → 1.000.000). Sem estimativa, zero. */
+function ownersLowerBound(entry: Record<string, unknown>): number {
+  const owners = typeof entry["owners"] === "string" ? entry["owners"] : "";
+  const first = owners.split("-")[0]?.replace(/,/g, "").trim() ?? "";
+  const number = Number(first);
+  return Number.isSafeInteger(number) ? number : 0;
+}
+
+/** Jogo já conhecido da fonte? Evita pedir de novo à Steam o que a Tako já acompanha. */
+export async function steamKnownAppids(sourceId: string, ids: readonly number[]): Promise<Set<number>> {
+  const { query } = await import("@tako/db");
+  if (ids.length === 0) return new Set();
+  const rows = await query<{ external_id: string }>(
+    "select external_id from external_products where source_id = $1 and external_id = any($2::text[])",
+    [sourceId, ids.map(String)],
+  );
+  return new Set(rows.map((row) => Number(row.external_id)).filter((id) => Number.isSafeInteger(id)));
+}
+
+/**
+ * Rastreador (OFR-008): prioridade da SteamSpy, detalhe da vitrine em BRL, um pedido por app, pausando entre
+ * pedidos. Página de loja ausente, gratuito e não-jogo ficam no relatório.
+ */
+export async function steamCrawl(options: {
+  topo?: number;
+  delayMs?: number;
+  now?: Date;
+  sourceId?: string;
+}): Promise<ConnectorOutput> {
+  const top = options.topo ?? 300;
+  const delayMs = options.delayMs ?? STEAM_CRAWL_DELAY_MS;
+  const all = await steamSpyTopAppids();
+  const known = options.sourceId === undefined ? new Set<number>() : await steamKnownAppids(options.sourceId, all);
+  const ids = all.filter((id) => !known.has(id)).slice(0, top);
+  const rows: RawOffer[] = [];
+  const errors: RowError[] = [];
+  const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+  for (const appid of ids) {
+    const result = await steamAppDetails(appid);
+    if (result.ok) {
+      const validated = validateOfferRow(result.row, null);
+      if (validated.ok) rows.push(validated.row);
+      else errors.push(validated.error);
+    } else if (result.code !== "indisponivel" && result.code !== "gratuito" && result.code !== "nao-jogo") {
+      // Limite e rede param o rastreador: melhor voltar depois do que martelar o limite. O que já veio
+      // continua valendo — a próxima execução retoma do que falta.
+      errors.push({ line: null, code: result.code, message: `app ${String(appid)}: ${result.message}` });
+      if (result.code === "limite" || result.code === "rede") break;
+    }
+    await sleep(delayMs);
+  }
+  return { rows, errors };
+}
