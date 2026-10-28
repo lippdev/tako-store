@@ -3,7 +3,8 @@
 import assert from "node:assert/strict";
 import { after, before, describe, it } from "node:test";
 import { importCollected } from "@tako/ingest";
-import { closePool, findGameBySlug, getPool, listProducts, query, upsertSource, type Source } from "../src/index";
+import type { Source } from "@tako/domain";
+import { closePool, findGameBySlug, getPool, listProducts, query, upsertSource } from "../src/index";
 
 let online = false;
 let source: Source;

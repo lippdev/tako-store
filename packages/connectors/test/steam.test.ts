@@ -46,7 +46,7 @@ const FEATURED = {
 test("lista plana das categorias que vendem, sem spotlights nem em breve", () => {
   const items = steamFeaturedItems(FEATURED);
   assert.equal(items.length, 5);
-  assert.ok(items.every((item) => !["coming_soon"].includes("")));
+  assert.ok(items.every((item) => item.final_price !== null));
 });
 
 test("linha da vitrine vira oferta validada com desconto e capa", () => {
