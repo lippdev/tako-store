@@ -109,3 +109,21 @@ ofertas e lançamentos em um pedido só, já com preço em BRL, desconto, capa o
 
 A Epic Games não tem API pública de preços; a GOG tem um endpoint de vitrine não documentado. As duas estão no
 radar da matriz como candidatas — conectar uma delas segue o mesmo molde do conector da Steam.
+
+## 6. Mapa de APIs das lojas (pesquisa de outubro de 2026)
+
+O que cada loja oferece para comparador de preços, e o que destrava. A regra do PRD vale para todas: sem acesso
+autorizado não há oferta real, e sem BRL a oferta não entra na comparação do Brasil.
+
+| Loja | O que fornece | Moeda | O que destrava |
+| :- | :- | :- | :- |
+| **Steam** | API pública da vitrine (já conectada) | BRL ✔ | Nada — já está rodando. Termos de uso comercial a confirmar antes do lançamento |
+| **Nuuvem** | API oficial documentada: produtos com `steam_app_id`, preços em BRL, sync incremental | BRL ✔ | Pedido de acesso ao suporte da Nuuvem (API em beta, parceiros selecionados) |
+| **Eneba** | Feed XML/CSV para afiliados aprovados | BRL na loja BR | Aprovação no programa de afiliados; a API GraphQL é só para merchants |
+| **Green Man Gaming** | Catálogo por API para Business Affiliate (direto ou via Admitad) | BRL na loja BR | Aprovação no Business Affiliate Program |
+| **Gamivo** | Feed XML sob pedido (`affiliate@gamivo.com`) | BRL na loja BR | Aprovação no programa de afiliados |
+| **Fanatical** | MCP oficial público, sem autenticação, com `steam_id` | USD para BR | Nada — mas sem BRL não entra na comparação do Brasil |
+| **CDKeys / Instant Gaming** | Nada oficial (só raspagem de terceiros) | — | Fora: raspagem não é acesso autorizado (PRD §9) |
+
+Quando uma dessas aprovar o cadastro, o caminho não muda: feed por URL em `/admin/fontes` (o importador já lê
+XML, CSV e JSON) ou conector próprio no molde do da Steam.
