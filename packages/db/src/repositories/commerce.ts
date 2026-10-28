@@ -9,7 +9,7 @@ const STORE_COLUMNS = `id, slug, name, partner_status, enabled, allowed_domains,
   currencies, affiliate_param, affiliate_value, affiliate_template`;
 const SOURCE_COLUMNS = `id, slug, name, kind, enabled, max_age_hours, regions, currencies, notes, access, format,
   covers_brl, cadence_hours, docs_url, terms_url, attribution, status, last_run_at, consecutive_failures, feed_url,
-  field_map`;
+  field_map, auto_create`;
 const OFFER_COLUMNS = `id, product_id, store_id, source_id, price_cents, reference_price_cents, currency, region,
   platform, availability, coupon, subscription, url, observed_at`;
 
@@ -110,13 +110,14 @@ export interface SourceInput {
   status?: Source["status"];
   feedUrl?: string | null;
   fieldMap?: Record<string, string>;
+  autoCreate?: boolean;
 }
 
 export async function upsertSource(input: SourceInput): Promise<Source> {
   const row = await queryOne<SourceRow>(
     `insert into sources (slug, name, kind, enabled, max_age_hours, regions, currencies, notes, access, format,
-       covers_brl, cadence_hours, docs_url, terms_url, attribution, status, feed_url, field_map)
-     values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
+       covers_brl, cadence_hours, docs_url, terms_url, attribution, status, feed_url, field_map, auto_create)
+     values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
      on conflict (slug) do update set
        name = excluded.name,
        kind = excluded.kind,
@@ -135,6 +136,7 @@ export async function upsertSource(input: SourceInput): Promise<Source> {
        status = excluded.status,
        feed_url = excluded.feed_url,
        field_map = excluded.field_map,
+       auto_create = excluded.auto_create,
        updated_at = now()
      returning ${SOURCE_COLUMNS}`,
     [
@@ -156,6 +158,7 @@ export async function upsertSource(input: SourceInput): Promise<Source> {
       input.status ?? "candidate",
       input.feedUrl ?? null,
       JSON.stringify(input.fieldMap ?? {}),
+      input.autoCreate ?? false,
     ],
   );
   if (row === null) throw new Error("upsert de fonte não devolveu linha");

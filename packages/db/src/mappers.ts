@@ -138,6 +138,7 @@ export interface SourceRow {
   consecutive_failures: number;
   feed_url: string | null;
   field_map: Record<string, string>;
+  auto_create: boolean;
 }
 
 export function toSource(row: SourceRow): Source {
@@ -163,6 +164,7 @@ export function toSource(row: SourceRow): Source {
     consecutiveFailures: row.consecutive_failures,
     feedUrl: row.feed_url,
     fieldMap: row.field_map,
+    autoCreate: row.auto_create,
   };
 }
 
