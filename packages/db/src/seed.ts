@@ -65,6 +65,16 @@ async function main(): Promise<void> {
     allowedDomains: ["antiga.example"],
   });
 
+  // Loja real: os jogos da Steam são comprados na própria Steam. Fonte pública, sem afiliação ainda.
+  await upsertStore({
+    slug: "steam",
+    name: "Steam",
+    partnerStatus: "pending",
+    allowedDomains: ["store.steampowered.com", "steampowered.com"],
+    linkKind: "direct",
+    attribution: "Preços e disponibilidade: Steam (store.steampowered.com).",
+  });
+
   const demoFile = await upsertSource({
     slug: "arquivo-demo",
     name: "Arquivo de demonstração",
@@ -90,6 +100,22 @@ async function main(): Promise<void> {
     cadenceHours: 6,
     status: "approved",
     attribution: "Dados fictícios gerados pelo próprio projeto.",
+  });
+  // Fonte real: API pública da vitrine da Steam, preços em BRL. É o registro canônico dos jogos dela —
+  // o que ainda não existe no catálogo é criado da própria fonte (autoCreate), oculto até publicar.
+  await upsertSource({
+    slug: "steam",
+    name: "Steam",
+    kind: "api",
+    maxAgeHours: 24,
+    notes: "API pública da vitrine (featuredcategories), região BR. Sem contrato de parceiro; termos de uso comercial a confirmar antes do lançamento público (OPS-003).",
+    access: "api",
+    format: "json",
+    coversBrl: true,
+    cadenceHours: 6,
+    status: "approved",
+    attribution: "Preços e disponibilidade: Steam (store.steampowered.com).",
+    autoCreate: true,
   });
   await upsertSource({
     slug: "fonte-pausada",

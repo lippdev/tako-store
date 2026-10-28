@@ -44,7 +44,7 @@ o retrato da implementação e envelhece com ela.
 | OFR-005 Fila de revisão de vínculos | ✅ | `/admin/vinculos`, regra de confiança em `suggestProduct` |
 | OFR-006 Administração de fontes | ✅ | Pausar, executar, ver execuções com erros abertos e reprocessar pelo painel ou por `npm run worker -- retry --run <id>`; o erro resolvido fica marcado com a execução que o resolveu |
 | OFR-007 Expiração de ofertas | ✅ | `evaluateOffer` + `/admin/ofertas` com o veredito |
-| OFR-008 Primeiro conector real | 🟡 | Mecanismo pronto: feed por URL com de-para, execução pelo painel, agendador e erro por linha; falta o acesso autorizado de um parceiro |
+| OFR-008 Primeiro conector real | ✅ | Conector da Steam (API pública da vitrine, BRL): 40 jogos reais importados com capa e desconto oficial; jogo criado da fonte nasce oculto. Termos de uso comerciais a confirmar antes do lançamento (OPS-003) |
 | OFR-009 Segunda fonte real | ⛔ | Idem |
 
 ## Fase 3 — Loja pública
