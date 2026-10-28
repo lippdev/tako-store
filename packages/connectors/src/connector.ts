@@ -23,6 +23,14 @@ export interface RawOffer {
   observedAt: string | null;
   /** Loja para a qual a oferta aponta (slug cadastrado no banco). */
   storeSlug: string;
+  /** Capa oficial do jogo na fonte, quando a fonte entrega. Usada quando a fonte cria o jogo. */
+  coverUrl?: string | null;
+  /** Descrição curta oficial, quando a fonte entrega. */
+  description?: string | null;
+  /** Data de lançamento informada pela fonte, sem formato garantido; o editor corrige depois. */
+  releaseDate?: string | null;
+  /** Gêneros informados pela fonte. */
+  genres?: string[];
 }
 
 export interface RowError {
@@ -132,6 +140,12 @@ export function validateOfferRow(input: unknown, line: number | null): Validatio
       subscription: text("subscription") || text("assinatura") || null,
       observedAt: text("observedAt") || text("observadoEm") || null,
       storeSlug,
+      coverUrl: text("coverUrl") || text("capa") || null,
+      description: text("description") || text("descricao") || null,
+      releaseDate: text("releaseDate") || null,
+      genres: Array.isArray(row["genres"])
+        ? row["genres"].filter((genre): genre is string => typeof genre === "string" && genre.trim() !== "")
+        : [],
     },
   };
 }
@@ -183,8 +197,3 @@ export const demoFeedConnector: Connector & { collect: (input: CollectInput) => 
   notes: "Feed fictício servido do mesmo arquivo local da fonte de arquivo; nenhum acesso externo.",
 };
 
-export const CONNECTORS: readonly Connector[] = [demoFileConnector, demoFeedConnector];
-
-export function connectorFor(sourceSlug: string): Connector | null {
-  return CONNECTORS.find((connector) => connector.slug === sourceSlug) ?? null;
-}
