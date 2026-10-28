@@ -68,6 +68,9 @@ export default async function HomeAdminPage({ searchParams }: { searchParams: Pr
       <section className={styles["card"]}>
         <h2>Banner principal</h2>
         <p className={styles["muted"]}>
+          <a href="/admin/home/previa">Pré-visualizar a home</a> — mostra tudo, inclusive o oculto, sem publicar nada.
+        </p>
+        <p className={styles["muted"]}>
           A home mostra até três banners publicados, na ordem da posição. Banner sem jogo leva ao catálogo.
         </p>
         {banners.length === 0 ? (
