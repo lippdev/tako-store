@@ -69,6 +69,12 @@ export interface Source {
   feedUrl: string | null;
   /** De-para dos nomes de campo da fonte para os nomes canônicos do importador. */
   fieldMap: Record<string, string>;
+  /**
+   * A fonte é o registro canônico do jogo? Quando verdadeiro, jogo que ainda não existe no catálogo é criado
+   * da própria fonte (oculto até publicar), em vez de esperar na fila de vínculos. Uso: fonte oficial do
+   * próprio jogo, como a API pública da Steam. Fonte de agregador continua só sugerindo.
+   */
+  autoCreate: boolean;
 }
 
 export const SOURCE_ACCESSES = ["api", "partner-feed", "public-page", "unknown"] as const;

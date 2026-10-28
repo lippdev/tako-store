@@ -6,11 +6,13 @@
 
 import { suggestProduct, validateOfferRow, type ConnectorOutput, type RawOffer } from "@tako/connectors";
 import type { Source } from "@tako/domain";
+import { foldText, slugify } from "@tako/domain";
 import { collectForSource, type CollectOptions } from "./collect";
 import {
   approvedProductFor,
   autoApproveMapping,
   finishIngestionRun,
+  findGameBySlug,
   getIngestionRun,
   getSourceBySlug,
   getStoreBySlug,
@@ -22,8 +24,11 @@ import {
   startIngestionRun,
   suggestMapping,
   touchSourceRun,
+  updateGame,
   upsertExternalProduct,
+  upsertGame,
   upsertOffer,
+  upsertProduct,
 } from "@tako/db";
 
 export * from "./collect";
@@ -51,6 +56,37 @@ interface RowOutcome {
   error?: ImportedError;
   /** Linha normalizada, guardada junto do erro para o reprocessamento poder tentar de novo (OFR-006). */
   payload?: RawOffer;
+}
+
+/**
+ * Cria o jogo e o produto base que a fonte oficial trouxe. Devolve o id do produto novo, ou `null` quando o
+ * slug já pertence a um jogo com outro título — esse caso volta para a fila de revisão em vez de chutar.
+ */
+async function createGameFromSource(row: RawOffer): Promise<string | null> {
+  // Título sem letras latinas (japonês, coreano, chinês) não vira slug: usa o identificador da fonte.
+  const base = slugify(row.title) || `jogo-${row.externalId.toLowerCase()}`;
+  if (base === "") return null;
+  let slug = base;
+  const existing = await findGameBySlug(slug);
+  if (existing !== null && foldText(existing.title) !== foldText(row.title)) {
+    slug = `${base}-${row.externalId.toLowerCase()}`;
+    const alternative = await findGameBySlug(slug);
+    if (alternative !== null) return null;
+  }
+  const game = await upsertGame({
+    slug,
+    title: row.title,
+    coverUrl: row.coverUrl ?? null,
+    description: row.description ?? null,
+    genres: row.genres ?? [],
+    platforms: [row.platform],
+    published: false,
+  });
+  if (row.coverUrl !== null && row.coverUrl !== undefined && existing === null) {
+    await updateGame(game.id, { coverUrl: row.coverUrl });
+  }
+  const product = await upsertProduct({ gameId: game.id, kind: "base", platform: row.platform });
+  return product.id;
 }
 
 /** Grava uma linha já validada: produto externo, sugestão de vínculo, aprovação exata e oferta. */
@@ -92,6 +128,20 @@ async function persistRow(source: Source, row: RawOffer): Promise<RowOutcome> {
       confidence,
       reason: suggestion.reason,
     });
+  }
+
+  // Fonte canônica do jogo (fonte oficial da própria vitrine): o que ainda não existe no catálogo nasce da
+  // própria fonte, oculto até o editor publicar. Jogo que pode já existir com outro título continua na fila.
+  if (suggestion.productId === null && source.autoCreate) {
+    const created = await createGameFromSource(row);
+    if (created !== null) {
+      await autoApproveMapping({
+        externalProductId,
+        productId: created,
+        confidence: 1,
+        reason: `Fonte oficial criou o jogo e o produto (${row.platform})`,
+      });
+    }
   }
 
   const productId = await approvedProductFor(externalProductId);

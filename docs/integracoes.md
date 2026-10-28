@@ -89,3 +89,23 @@ Se o clique chega na loja e o painel de afiliado não registra, o problema é o 
 - Contrato e acesso de cada parceiro. Sem feed autorizado não há oferta real; o mecanismo está pronto e testado.
 - Segredo do feed: fica na URL cadastrada no banco. Proteja o banco e o acesso ao painel (o segundo fator existe para
   isso) e prefira tokens que possam ser rotacionados pelo parceiro.
+
+## 4. Fonte real: Steam (já conectada)
+
+A Steam tem API pública da vitrine, sem chave e sem contrato. O conector `steam` coleta destaque, mais vendidos,
+ofertas e lançamentos em um pedido só, já com preço em BRL, desconto, capa oficial e link canônico do app.
+
+- **Loja**: `Steam` (slug `steam`) com `store.steampowered.com` nos domínios permitidos — o botão leva à página do
+  jogo na Steam.
+- **Fonte**: `steam` (slug `steam`) com `auto_create` ligado: jogo que ainda não existe no catálogo é criado da
+  própria fonte (título e capa oficiais), oculto até você publicar. Use a alteração em lote de `/admin/jogos` para
+  publicar o conjunto.
+- **Coleta**: `npm run worker -- import --source steam`, botão "Executar agora" no painel, ou o agendador
+  (`due`/`daemon`, cadência de 6 h). Sem preço (gratuito, em breve) e moeda fora do BRL são recusados com código.
+- **Termos**: a API é pública, mas o uso comercial precisa de confirmação antes do lançamento público (OPS-003).
+  A atribuição "Preços e disponibilidade: Steam" acompanha a oferta.
+
+## 5. Próximas fontes
+
+A Epic Games não tem API pública de preços; a GOG tem um endpoint de vitrine não documentado. As duas estão no
+radar da matriz como candidatas — conectar uma delas segue o mesmo molde do conector da Steam.
