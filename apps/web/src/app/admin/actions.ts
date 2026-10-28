@@ -14,6 +14,7 @@ import {
   findGameBySlug,
   getGameById,
   getSourceBySlug,
+  applyBulkVisibility,
   getHomeVersion,
   getStoreBySlug,
   homeSnapshot,
@@ -55,7 +56,11 @@ import {
   verifyUserTotp,
 } from "@tako/db";
 import {
+  bulkChange,
+  gamesAffectedByBulk,
   isAffiliateParam,
+  isBulkAction,
+  isBulkFilter,
   isMediaKind,
   normalizeDomain,
   parseCatalogFile,
@@ -785,4 +790,28 @@ export async function restaurarHome(form: FormData): Promise<void> {
   await saveHomeVersion(user.email, `restaurou a versão de ${new Date(before.createdAt).toLocaleString("pt-BR")}`, state);
   await writeAudit({ actor: user, action: "home:restaurar", entity: "home_version", entityId: id });
   redirect("/admin/home?ok=restaurada");
+}
+
+/** Alteração em lote (PRD §12.2): a prévia é calculada de novo no servidor; o botão não carrega a lista. */
+export async function aplicarLote(form: FormData): Promise<void> {
+  const user = await requirePermission("games:write");
+  const filtro = text(form, "filtro");
+  const acao = text(form, "acao");
+  if (!isBulkFilter(filtro) || !isBulkAction(acao)) redirect("/admin/jogos?erro=lote");
+  const games = await listAllGames();
+  const alvo = gamesAffectedByBulk(games, filtro, acao);
+  if (alvo.length === 0) redirect("/admin/jogos?ok=lote-vazio");
+  const change = bulkChange(acao);
+  const applied = await applyBulkVisibility(
+    alvo.map((game) => game.id),
+    change,
+  );
+  await writeAudit({
+    actor: user,
+    action: `jogo:lote-${acao}`,
+    entity: "game",
+    entityId: null,
+    detail: { filtro, jogos: applied },
+  });
+  redirect(`/admin/jogos?filtro=${filtro}&ok=lote&jogos=${String(applied)}&acao=${acao}`);
 }
