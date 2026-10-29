@@ -6,19 +6,23 @@
 //   npm run worker -- retry --run <id da execução>
 //   npm run worker -- due                 # uma passada pelas fontes com coleta devida
 //   npm run worker -- daemon [--interval 60]
+//   npm run worker -- retain              # apaga tentativa, clique e log fora do prazo
 //
 // O agendador respeita `cadence_hours` de cada fonte: coleta a que está devida, registra a execução e volta a dormir.
 // Ele não substitui um supervisor de processo (systemd, container restart), só dispensa um cron por fonte.
 
-import { connectorFor } from "@tako/connectors";
+import { connectorFor, steamCrawl, steamRefresh } from "@tako/connectors";
+import type { Source } from "@tako/domain";
 import {
+  applyRetention,
   closePool,
   getSourceBySlug,
   listDueSources,
   listIngestionRuns,
+  listSourceAppIdsOldestFirst,
   listSources,
 } from "@tako/db";
-import { importSource, retryFailedRun, sourceCanCollect, type RunSummary } from "@tako/ingest";
+import { importCollected, importSource, retryFailedRun, sourceCanCollect, type RunSummary } from "@tako/ingest";
 
 interface Args {
   command: string;
@@ -28,6 +32,8 @@ interface Args {
   limit?: number;
   interval?: number;
   once?: boolean;
+  topo?: number;
+  lote?: number;
 }
 
 function parseArgs(argv: string[]): Args {
@@ -38,6 +44,12 @@ function parseArgs(argv: string[]): Args {
     const next = rest[index + 1];
     if (token === "--source" && next !== undefined) {
       args.source = next;
+    }
+    if (token === "--topo" && next !== undefined) {
+      args.topo = Number(next);
+      index += 1;
+    } else if (token === "--lote" && next !== undefined) {
+      args.lote = Number(next);
       index += 1;
     } else if (token === "--file" && next !== undefined) {
       args.file = next;
@@ -87,8 +99,65 @@ async function importOne(slug: string, file: string | undefined): Promise<void> 
   printSummary(summary);
 }
 
+async function retain(): Promise<void> {
+  const result = await applyRetention();
+  console.log(
+    `Retenção: ${String(result.loginAttempts)} tentativa(s), ${String(result.clicks)} clique(s), ${String(result.resolvedErrors)} erro(s) resolvido(s), ${String(result.auditEvents)} auditoria(s).`,
+  );
+}
+
+/** Rastreador da Steam: o catálogo cresce a cada execução, em ritmo do limite da vitrine. */
+async function crawlOne(slug: string, topo: number): Promise<void> {
+  if (slug !== "steam") throw new Error(`rastreador ainda só para steam (pediu "${slug}")`);
+  const source = await getSourceBySlug(slug);
+  if (source === null) throw new Error(`fonte "${slug}" não existe no banco`);
+  console.log(`Rastreador da Steam: até ${String(topo)} apps da lista de prioridade.`);
+  const collected = await steamCrawl({ topo, sourceId: source.id });
+  const summary = await importCollected(source, collected, "rastreador");
+  console.log(`Fonte ${source.name}`);
+  printSummary(summary);
+  await closePool();
+}
+
+/**
+ * Atualização da Steam (OFR-007): reconsulta um lote dos apps com a observação mais antiga, para o preço não
+ * vencer e o jogo sair da comparação. O rastreio cria; a atualização mantém vivo.
+ */
+async function syncSource(source: Source, lote: number): Promise<RunSummary> {
+  const ids = (await listSourceAppIdsOldestFirst(source.slug, lote))
+    .map((appid) => Number(appid))
+    .filter((appid) => Number.isFinite(appid) && appid > 0);
+  if (ids.length === 0) {
+    console.log(`Atualização da Steam: nenhum app na fila de ${source.slug}.`);
+    return {
+      runId: "",
+      status: "success",
+      received: 0,
+      accepted: 0,
+      linked: 0,
+      rejected: 0,
+      message: "nenhum app na fila de atualização",
+      errors: [],
+    } satisfies RunSummary;
+  }
+  console.log(`Atualização da Steam: ${String(ids.length)} app(s) com a observação mais antiga.`);
+  const collected = await steamRefresh(ids);
+  return importCollected(source, collected, "atualização");
+}
+
+async function syncOne(slug: string, lote: number): Promise<void> {
+  if (slug !== "steam") throw new Error(`atualização ainda só para steam (pediu "${slug}")`);
+  const source = await getSourceBySlug(slug);
+  if (source === null) throw new Error(`fonte "${slug}" não existe no banco`);
+  const summary = await syncSource(source, lote);
+  console.log(`Fonte ${source.name}`);
+  printSummary(summary);
+  await closePool();
+}
+
 /** Uma passada: cada fonte devida é coletada uma vez, em série; falha de uma não impede as outras. */
-async function runDue(): Promise<number> {
+async function runDue(lote: number): Promise<number> {
+  await retain();
   const due = (await listDueSources()).filter(sourceCanCollect);
   if (due.length === 0) {
     console.log("Nenhuma fonte com coleta devida agora.");
@@ -99,6 +168,12 @@ async function runDue(): Promise<number> {
     try {
       const summary = await importSource(source, "agendador");
       console.log(`${source.slug}: ${String(summary.accepted)} oferta(s) gravada(s), ${String(summary.rejected)} recusada(s)`);
+      if (source.slug === "steam") {
+        const sincronia = await syncSource(source, lote);
+        console.log(
+          `${source.slug} (atualização): ${String(sincronia.accepted)} oferta(s) regravada(s), ${String(sincronia.rejected)} recusada(s)`,
+        );
+      }
     } catch (error) {
       failures += 1;
       console.error(`${source.slug}: ${error instanceof Error ? error.message : String(error)}`);
@@ -107,10 +182,12 @@ async function runDue(): Promise<number> {
   return failures;
 }
 
-async function runDaemon(intervalSeconds: number, once: boolean): Promise<void> {
-  console.log(`Agendador: uma passada a cada ${String(intervalSeconds)} s${once ? " (uma vez)" : ""}.`);
+async function runDaemon(intervalSeconds: number, once: boolean, lote: number): Promise<void> {
+  console.log(
+    `Agendador: uma passada a cada ${String(intervalSeconds)} s${once ? " (uma vez)" : ""}; atualização da Steam com lote de ${String(lote)}.`,
+  );
   for (;;) {
-    const failures = await runDue();
+    const failures = await runDue(lote);
     if (failures > 0) console.error(`${String(failures)} fonte(s) falharam nesta passada.`);
     if (once) return;
     await new Promise((resolve) => setTimeout(resolve, intervalSeconds * 1000));
@@ -145,21 +222,32 @@ async function main(): Promise<void> {
       if (args.source === undefined) throw new Error("use --source <slug>");
       await importOne(args.source, args.file);
       return;
+    case "crawl":
+      if (args.source === undefined) throw new Error("use --source steam");
+      await crawlOne(args.source, args.topo ?? 300);
+      return;
+    case "sync":
+      if (args.source === undefined) throw new Error("use --source steam");
+      await syncOne(args.source, args.lote ?? 250);
+      return;
     case "retry":
       if (args.run === undefined) throw new Error("informe a execução com --run <id>");
       await retryRun(args.run);
       return;
+    case "retain":
+      await retain();
+      return;
     case "due": {
-      const failures = await runDue();
+      const failures = await runDue(args.lote ?? 250);
       if (failures > 0) process.exitCode = 1;
       return;
     }
     case "daemon":
-      await runDaemon(args.interval ?? 60, args.once ?? false);
+      await runDaemon(args.interval ?? 60, args.once ?? false, args.lote ?? 250);
       return;
     default:
       console.log(
-        "Uso:\n  npm run worker -- sources\n  npm run worker -- runs [--limit 10]\n  npm run worker -- import --source <slug> [--file <arquivo>]\n  npm run worker -- retry --run <id>\n  npm run worker -- due\n  npm run worker -- daemon [--interval 60] [--once]",
+        "Uso:\n  npm run worker -- sources\n  npm run worker -- runs [--limit 10]\n  npm run worker -- import --source <slug> [--file <arquivo>]\n  npm run worker -- crawl --source steam [--topo 300]\n  npm run worker -- sync --source steam [--lote 250]\n  npm run worker -- retry --run <id>\n  npm run worker -- due [--lote 250]\n  npm run worker -- daemon [--interval 60] [--once] [--lote 250]\n  npm run worker -- retain",
       );
   }
 }

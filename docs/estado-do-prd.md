@@ -44,8 +44,9 @@ o retrato da implementação e envelhece com ela.
 | OFR-005 Fila de revisão de vínculos | ✅ | `/admin/vinculos`, regra de confiança em `suggestProduct` |
 | OFR-006 Administração de fontes | ✅ | Pausar, executar, ver execuções com erros abertos e reprocessar pelo painel ou por `npm run worker -- retry --run <id>`; o erro resolvido fica marcado com a execução que o resolveu |
 | OFR-007 Expiração de ofertas | ✅ | `evaluateOffer` + `/admin/ofertas` com o veredito |
-| OFR-008 Primeiro conector real | 🟡 | Mecanismo pronto: feed por URL com de-para, execução pelo painel, agendador e erro por linha; falta o acesso autorizado de um parceiro |
+| OFR-008 Primeiro conector real | ✅ | Conector da Steam (API pública da vitrine, BRL): 736 jogos reais com preço e desconto oficiais, catálogo ampliado por rastreio (appdetails + prioridade do SteamSpy); jogo criado da fonte nasce publicado e a capa é a retrata 2:3 da biblioteca. Termos de uso comerciais a confirmar antes do lançamento (OPS-003) |
 | OFR-009 Segunda fonte real | ⛔ | Idem |
+| PAR-005 Coletor de anunciantes | ⛔ | P1, fora da primeira versão: coletor Telegram e similares para lojas sem API (Instant Gaming, CDKeys), com adaptação de link de afiliado e atribuição; regras em `PRD.md` §9. Falta o responsável escolher os canais |
 
 ## Fase 3 — Loja pública
 
@@ -94,6 +95,7 @@ o retrato da implementação e envelhece com ela.
    passagem com NVDA/VoiceOver.
 7. **Token `--text-dim`** — 3,02:1 no design system do launcher; a correção é lá (ADR-0001), não aqui.
 
+
 ## Administração (§12) além do §20
 
 | Requisito | Estado | Onde |
@@ -105,3 +107,9 @@ o retrato da implementação e envelhece com ela.
 | Banners da home | ✅ | `/admin/home`: criar, publicar, ocultar e remover; a loja mostra até três com navegação por pontos |
 | Chave de afiliado | ✅ | `/admin/lojas`: parâmetro + valor ou molde com `{url}`, validado contra os domínios permitidos; cliques por oferta em `/admin/ofertas` |
 | Coleta contínua | ✅ | `npm run worker -- due` e `daemon`, respeitando `cadence_hours`; unidades em `deploy/systemd/` |
+| Segredos não reexibidos | ✅ | Chave e molde de afiliado não voltam ao formulário; campo vazio mantém; auditoria do feed guarda só o host |
+| Feed só em https público | ✅ | `assertPublicFeedUrl` recusa rede local, IP privado e redirecionamento interno |
+| Privacidade | ✅ | `/privacidade` e [privacidade.md](privacidade.md); `npm run worker -- retain` apaga clique, tentativa e log fora do prazo |
+| Desativar ofertas de fonte | ✅ | Botão em `/admin/fontes`: a oferta sai da comparação, o histórico fica |
+| Catálogo em arquivo | ✅ | `/admin/jogos`: exportar tudo em JSON, importar com prévia (novo, alterado, sem mudança, erro por linha) e aplicar em transação |
+| Rascunho e histórico da home | ✅ | `/admin/home`: salvar versão com nota, restaurar cria versão nova; o histórico nunca é apagado |

@@ -10,9 +10,15 @@ import {
   deleteBanner,
   deleteSection,
   decideMapping,
+  disableSourceOffers,
   findGameBySlug,
   getGameById,
   getSourceBySlug,
+  applyBulkVisibility,
+  getHomeVersion,
+  getStoreBySlug,
+  homeSnapshot,
+  listAllGames,
   listMediaAssets,
   mergeGames,
   removeExternalIdentifier,
@@ -27,16 +33,19 @@ import {
   setSourceEnabled,
   updateGame,
   updateSourceMatrix,
+  applyCatalogImport,
   upsertBanner,
   upsertGame,
   upsertProduct,
+  restoreHomeVersion,
+  saveHomeVersion,
   upsertSection,
   upsertSource,
   upsertStore,
   writeAudit,
 } from "@tako/db";
 import { importSource, retryFailedRun } from "@tako/ingest";
-import { validateFieldMap } from "@tako/connectors";
+import { assertPublicFeedUrl, validateFieldMap } from "@tako/connectors";
 import {
   disableMfa,
   enableMfa,
@@ -47,12 +56,21 @@ import {
   verifyUserTotp,
 } from "@tako/db";
 import {
+  ACTIVATION_PLATFORMS,
+  bulkChange,
+  gamesAffectedByBulk,
   isAffiliateParam,
+  isBulkAction,
+  isBulkFilter,
   isMediaKind,
   normalizeDomain,
+  parseCatalogFile,
   parseMediaUrl,
+  redactUrl,
+  serializeCatalogFile,
   slugify,
   templateDomain,
+  type ActivationPlatform,
   type HomeRule,
   type MediaKind,
 } from "@tako/domain";
@@ -86,6 +104,7 @@ export async function entrar(form: FormData): Promise<void> {
   const result = await signIn(email, password, text(form, "codigo"));
   if (result === "ok") redirect(destination);
   if (result === "mfa") redirect(`/admin/entrar?mfa=1&destino=${encodeURIComponent(destination)}`);
+  if (result === "throttled") redirect(`/admin/entrar?bloqueado=15&destino=${encodeURIComponent(destination)}`);
   redirect(`/admin/entrar?erro=1&destino=${encodeURIComponent(destination)}`);
 }
 
@@ -155,7 +174,23 @@ export async function decidirVinculo(form: FormData): Promise<void> {
   const user = await requirePermission("mappings:write");
   const id = text(form, "id");
   const decision = text(form, "decisao");
-  const productId = optional(form, "produtoId");
+  let productId = optional(form, "produtoId");
+  // O vínculo pode apontar para um produto que a Tako ainda não tem (PRD §12.3): o jogo escolhido
+  // no campo "novo produto" nasce com o produto da edição e plataforma informadas pela fonte.
+  const novoJogoId = optional(form, "novoJogoId");
+  const novoTipo = text(form, "novoTipo");
+  if (decision === "aprovar" && productId === null && novoJogoId !== null) {
+    const platform = ACTIVATION_PLATFORMS.includes(text(form, "novoPlataforma") as ActivationPlatform)
+      ? (text(form, "novoPlataforma") as ActivationPlatform)
+      : "other";
+    const product = await upsertProduct({
+      gameId: novoJogoId,
+      kind: novoTipo === "edition" || novoTipo === "dlc" || novoTipo === "bundle" ? novoTipo : "base",
+      editionName: optional(form, "novoEdicao"),
+      platform,
+    });
+    productId = product.id;
+  }
   if (decision === "aprovar") {
     await decideMapping({ id, status: "approved", productId, decidedBy: user.email });
   } else if (decision === "rejeitar") {
@@ -178,7 +213,12 @@ export async function salvarLoja(form: FormData): Promise<void> {
   const domains = list(form, "dominios").map(normalizeDomain).filter((domain) => domain !== "");
   const partner = text(form, "parceria");
   const affiliateParam = optional(form, "afiliadoParam");
-  const affiliateTemplate = optional(form, "afiliadoMolde");
+  const existing = await getStoreBySlug(text(form, "slug"));
+  // Campo vazio mantém o segredo já cadastrado. Só some quando a pessoa pede para remover (PRD §12.1).
+  const affiliateValue = bool(form, "removerChave") ? null : optional(form, "afiliadoValor") ?? existing?.affiliateValue ?? null;
+  const affiliateTemplate = bool(form, "removerMolde")
+    ? null
+    : optional(form, "afiliadoMolde") ?? existing?.affiliateTemplate ?? null;
   if (affiliateParam !== null && !isAffiliateParam(affiliateParam)) redirect("/admin/lojas?erro=afiliado");
   if (affiliateTemplate !== null) {
     const host = templateDomain(affiliateTemplate);
@@ -195,7 +235,7 @@ export async function salvarLoja(form: FormData): Promise<void> {
     linkKind: text(form, "link") === "affiliate" ? "affiliate" : text(form, "link") === "source" ? "source" : "direct",
     attribution: optional(form, "atribuicao"),
     affiliateParam,
-    affiliateValue: optional(form, "afiliadoValor"),
+    affiliateValue,
     affiliateTemplate,
   });
   await writeAudit({ actor: user, action: "loja:salvar", entity: "store", entityId: store.id, detail: { slug: store.slug } });
@@ -212,6 +252,21 @@ export async function alternarFonte(form: FormData): Promise<void> {
 }
 
 /** Coleta e importa agora, pelo painel, com o mesmo código do worker (OFR-004, OFR-006). */
+/** Tira as ofertas atuais da fonte da comparação. O histórico fica; a próxima coleta pode repor (PRD §12.6). */
+export async function desativarOfertasDaFonte(form: FormData): Promise<void> {
+  const user = await requirePermission("sources:write");
+  const id = text(form, "id");
+  const removed = await disableSourceOffers(id);
+  await writeAudit({
+    actor: user,
+    action: "fonte:desativar-ofertas",
+    entity: "source",
+    entityId: id,
+    detail: { desativadas: removed },
+  });
+  redirect(`/admin/fontes?ok=ofertas&desativadas=${String(removed)}`);
+}
+
 export async function executarImportacao(form: FormData): Promise<void> {
   const user = await requirePermission("sources:write");
   const slug = text(form, "slug");
@@ -649,9 +704,17 @@ export async function salvarFonte(form: FormData): Promise<void> {
   const user = await requirePermission("sources:write");
   const slug = slugify(text(form, "slug") === "" ? text(form, "nome") : text(form, "slug"));
   const name = text(form, "nome");
-  const feedUrl = optional(form, "feedUrl");
+  const existing = await getSourceBySlug(slug);
+  const feedUrl = bool(form, "removerFeed") ? null : optional(form, "feedUrl") ?? existing?.feedUrl ?? null;
   if (slug === "" || name === "") redirect("/admin/fontes?erro=fonte");
-  if (feedUrl !== null && !feedUrl.startsWith("https://")) redirect("/admin/fontes?erro=feed-https");
+  if (feedUrl !== null) {
+    try {
+      await assertPublicFeedUrl(feedUrl);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "";
+      redirect(message.includes("https") ? "/admin/fontes?erro=feed-https" : "/admin/fontes?erro=feed-rede");
+    }
+  }
 
   const { map, errors } = lerMapaDeCampos(text(form, "mapa"));
   if (errors.length > 0) redirect(`/admin/fontes?erro=mapa&detalhe=${encodeURIComponent(errors[0] ?? "")}`);
@@ -662,7 +725,14 @@ export async function salvarFonte(form: FormData): Promise<void> {
     kind: text(form, "tipo") === "page" ? "page" : "feed",
     maxAgeHours: Number(text(form, "validade") || "24"),
     access: feedUrl === null ? "unknown" : "partner-feed",
-    format: text(form, "formato") === "csv" ? "csv" : text(form, "formato") === "json" ? "json" : "unknown",
+    format:
+      text(form, "formato") === "csv"
+        ? "csv"
+        : text(form, "formato") === "json"
+          ? "json"
+          : text(form, "formato") === "xml"
+            ? "xml"
+            : "unknown",
     coversBrl: bool(form, "cobreBrl"),
     cadenceHours: Number(text(form, "cadencia") || "24"),
     feedUrl,
@@ -670,6 +740,119 @@ export async function salvarFonte(form: FormData): Promise<void> {
     status: "evaluating",
     notes: optional(form, "observacoes"),
   });
-  await writeAudit({ actor: user, action: "fonte:salvar", entity: "source", entityId: source.id, detail: { slug, feedUrl } });
+  await writeAudit({
+    actor: user,
+    action: "fonte:salvar",
+    entity: "source",
+    entityId: source.id,
+    detail: { slug, feed: feedUrl === null ? null : redactUrl(feedUrl) },
+  });
   redirect("/admin/fontes?ok=fonte");
+}
+
+/** Catálogo em arquivo (PRD §12.2): exportar o que existe agora. */
+export async function exportarCatalogo(): Promise<void> {
+  const user = await requirePermission("games:write");
+  const games = await listAllGames();
+  await writeAudit({ actor: user, action: "catalogo:exportar", entity: "game", entityId: null, detail: { jogos: games.length } });
+  const body = serializeCatalogFile(games, new Date());
+  redirect(`/admin/jogos/exportar?arquivo=catalogo.json&conteudo=${encodeURIComponent(body)}`);
+}
+
+/** Prévia da importação: lê o arquivo, mostra o que entra, o que muda e o que está errado. Nada grava aqui. */
+export async function preverImportacaoCatalogo(form: FormData): Promise<void> {
+  await requirePermission("games:write");
+  const file = form.get("arquivo");
+  if (!(file instanceof File) || file.size === 0) redirect("/admin/jogos?erro=arquivo");
+  if (file.size > 5_000_000) redirect("/admin/jogos?erro=arquivo-grande");
+  const conteudo = await file.text();
+  const target = new URLSearchParams({ arquivo: file.name, conteudo });
+  redirect(`/admin/jogos/importar?${target.toString()}`);
+}
+
+/** Confirma a prévia: grava tudo em uma transação, ou nada. */
+export async function confirmarImportacaoCatalogo(form: FormData): Promise<void> {
+  const user = await requirePermission("games:write");
+  const conteudo = text(form, "conteudo");
+  if (conteudo === "") redirect("/admin/jogos?erro=arquivo");
+  const { entries, issues } = parseCatalogFile(conteudo);
+  if (issues.length > 0 || entries.length === 0) redirect("/admin/jogos?erro=arquivo-invalido");
+  const result = await applyCatalogImport(entries);
+  await writeAudit({
+    actor: user,
+    action: "catalogo:importar",
+    entity: "game",
+    entityId: null,
+    detail: { jogos: result.applied.length, recusados: result.failed.length },
+  });
+  redirect(`/admin/jogos?ok=importado&jogos=${String(result.applied.length)}`);
+}
+
+/** Rascunho da home (PRD §12.4): guarda o estado num cookie de rascunho versionado — na prática, salva e não publica. */
+export async function salvarRascunhoHome(form: FormData): Promise<void> {
+  const user = await requirePermission("home:write");
+  const note = text(form, "nota");
+  const version = await saveHomeVersion(user.email, note === "" ? null : note);
+  await writeAudit({ actor: user, action: "home:rascunho", entity: "home_version", entityId: version.id, detail: { nota: note } });
+  redirect("/admin/home?ok=rascunho");
+}
+
+/** Restaura uma versão anterior da home. O histórico fica; a restauração cria uma versão nova com o estado anterior. */
+export async function restaurarHome(form: FormData): Promise<void> {
+  const user = await requirePermission("home:write");
+  const id = text(form, "id");
+  const before = await getHomeVersion(id);
+  if (before === null) redirect("/admin/home?erro=versao");
+  const state = await homeSnapshot();
+  await restoreHomeVersion(id);
+  await saveHomeVersion(user.email, `restaurou a versão de ${new Date(before.createdAt).toLocaleString("pt-BR")}`, state);
+  await writeAudit({ actor: user, action: "home:restaurar", entity: "home_version", entityId: id });
+  redirect("/admin/home?ok=restaurada");
+}
+
+/** Alteração em lote (PRD §12.2): a prévia é calculada de novo no servidor; o botão não carrega a lista. */
+export async function aplicarLote(form: FormData): Promise<void> {
+  const user = await requirePermission("games:write");
+  const filtro = text(form, "filtro");
+  const acao = text(form, "acao");
+  if (!isBulkFilter(filtro) || !isBulkAction(acao)) redirect("/admin/jogos?erro=lote");
+  const games = await listAllGames();
+  const alvo = gamesAffectedByBulk(games, filtro, acao);
+  if (alvo.length === 0) redirect("/admin/jogos?ok=lote-vazio");
+  const change = bulkChange(acao);
+  const applied = await applyBulkVisibility(
+    alvo.map((game) => game.id),
+    change,
+  );
+  await writeAudit({
+    actor: user,
+    action: `jogo:lote-${acao}`,
+    entity: "game",
+    entityId: null,
+    detail: { filtro, jogos: applied },
+  });
+  redirect(`/admin/jogos?filtro=${filtro}&ok=lote&jogos=${String(applied)}&acao=${acao}`);
+}
+
+/** Vínculos em lote (PRD §12.3): a mesma decisão para todo vínculo marcado com "lote" na fila. */
+export async function vinculosEmLote(form: FormData): Promise<void> {
+  const user = await requirePermission("mappings:write");
+  const decision = text(form, "decisao");
+  const ids = form.getAll("marcado").map(String);
+  if (ids.length === 0) redirect("/admin/vinculos?ok=1");
+  for (const id of ids) {
+    if (decision === "aprovar") {
+      await decideMapping({ id, status: "approved", productId: null, decidedBy: user.email });
+    } else {
+      await decideMapping({ id, status: "rejected", productId: null, decidedBy: user.email });
+    }
+  }
+  await writeAudit({
+    actor: user,
+    action: `vinculo:lote-${decision}`,
+    entity: "product_mapping",
+    entityId: null,
+    detail: { marcados: ids.length, decisao: decision },
+  });
+  redirect(`/admin/vinculos?ok=lote&lote=${String(ids.length)}`);
 }

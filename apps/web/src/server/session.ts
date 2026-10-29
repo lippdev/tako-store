@@ -1,6 +1,6 @@
 import "server-only";
 
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { cache } from "react";
 import {
@@ -10,6 +10,8 @@ import {
   createMfaPending,
   createSession,
   findMfaPending,
+  loginThrottle,
+  recordLoginAttempt,
   revokeSession,
   sessionUser,
   verifyUserTotp,
@@ -20,7 +22,15 @@ import {
 export const SESSION_COOKIE = "tako_admin";
 export const MFA_COOKIE = "tako_admin_mfa";
 
-export type SignInResult = "ok" | "invalid" | "mfa";
+export type SignInResult = "ok" | "invalid" | "mfa" | "throttled";
+
+/** Endereço de quem chamou, para o limite de tentativas. Atrás de proxy, o primeiro da cadeia é o cliente. */
+async function clientIp(): Promise<string | null> {
+  const list = await headers();
+  const forwarded = list.get("x-forwarded-for");
+  if (forwarded !== null && forwarded.trim() !== "") return forwarded.split(",")[0]?.trim() ?? null;
+  return list.get("x-real-ip");
+}
 
 /** Usuário da requisição, ou `null`. Uma leitura por requisição. */
 export const currentUser = cache(async (): Promise<AdminUser | null> => {
@@ -49,8 +59,17 @@ export async function requirePermission(permission: Permission): Promise<AdminUs
  * código e só abre a sessão depois do TOTP certo.
  */
 export async function signIn(email: string, password: string, code = ""): Promise<SignInResult> {
+  // Sem senha correta, o código não é conferido: a ordem é senha → limite → segundo fator.
+  const ip = await clientIp();
+  const throttle = await loginThrottle({ email, ip });
+  if (throttle.blocked) return "throttled";
+
   const user = await authenticate(email, password);
-  if (user === null) return "invalid";
+  if (user === null) {
+    await recordLoginAttempt({ email, ip, succeeded: false });
+    return "invalid";
+  }
+  await recordLoginAttempt({ email, ip, succeeded: true });
   const jar = await cookies();
 
   if (!user.mfaEnabled) {

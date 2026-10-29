@@ -79,6 +79,22 @@ export default async function JogosPage({ searchParams }: { searchParams: Promis
   const cards = catalog(shop, params);
   const options = facets(shop);
 
+  // Paginação server-side: 736 cards numa página só eram 1,5 MB de HTML e ~3 s de render. 60 por página mantém
+  // a resposta leve; os filtros e a ordenação valem para o catálogo inteiro antes do recorte.
+  const POR_PAGINA = 60;
+  const pagina = Math.max(1, Number(one(resolved["pagina"]) ?? "1") || 1);
+  const paginas = Math.max(1, Math.ceil(cards.length / POR_PAGINA));
+  const visiveis = cards.slice((pagina - 1) * POR_PAGINA, pagina * POR_PAGINA);
+  const comPagina = (n: number): string => {
+    const query = new URLSearchParams();
+    for (const [key, value] of Object.entries(resolved)) {
+      if (key === "pagina" || value === undefined) continue;
+      query.set(key, Array.isArray(value) ? value[0] ?? "" : value);
+    }
+    query.set("pagina", String(n));
+    return `/jogos?${query.toString()}`;
+  };
+
   return (
     <div className={styles["layout"]}>
       <aside className={styles["filters"]} aria-label="Filtros">
@@ -188,11 +204,34 @@ export default async function JogosPage({ searchParams }: { searchParams: Promis
             Tente tirar um filtro ou buscar por outro nome. Os preços mostrados são das ofertas acompanhadas hoje.
           </Vazio>
         ) : (
-          <div className={styles["grid"]}>
-            {cards.map((card) => (
-              <CartaoDeJogo key={card.game.id} card={card} />
-            ))}
-          </div>
+          <>
+            <div className={styles["grid"]}>
+              {visiveis.map((card) => (
+                <CartaoDeJogo key={card.game.id} card={card} />
+              ))}
+            </div>
+            {paginas > 1 && (
+              <nav className={styles["paginacao"]} aria-label="Páginas do catálogo">
+                {pagina > 1 ? (
+                  <Link className={styles["paginaLink"]} href={comPagina(pagina - 1)}>
+                    ← Anterior
+                  </Link>
+                ) : (
+                  <span />
+                )}
+                <span className="label-sm">
+                  página {String(pagina)} de {String(paginas)}
+                </span>
+                {pagina < paginas ? (
+                  <Link className={styles["paginaLink"]} href={comPagina(pagina + 1)}>
+                    Próxima →
+                  </Link>
+                ) : (
+                  <span />
+                )}
+              </nav>
+            )}
+          </>
         )}
       </section>
     </div>

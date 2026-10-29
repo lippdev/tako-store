@@ -4,6 +4,8 @@
 import type { ActivationPlatform, Availability } from "@tako/domain";
 import { validateOfferRow, type ConnectorOutput, type RawOffer, type RowError } from "./connector";
 import { parseCsv } from "./importer";
+import { assertPublicFeedUrl, FEED_MAX_REDIRECTS } from "./public-url";
+import { xmlRecords } from "./xml";
 
 /** Campos canônicos que o de-para pode apontar. */
 export const CANONICAL_FIELDS = [
@@ -27,7 +29,7 @@ export type CanonicalField = (typeof CANONICAL_FIELDS)[number];
 
 export interface FeedConfig {
   url: string;
-  format: "json" | "csv" | "auto";
+  format: "json" | "csv" | "xml" | "auto";
   /** Canônico → nome do campo na fonte. Ex.: `{ priceCents: "preco_centavos" }`. */
   fieldMap: Record<string, string>;
   timeoutMs?: number;
@@ -88,28 +90,34 @@ export interface FeedFetch {
   url: string;
 }
 
-/** Busca o feed. Erro de rede, status fora de 2xx e corpo vazio viram erro com mensagem para o operador. */
+/** Busca o feed. Erro de rede, status fora de 2xx, corpo vazio e destino interno viram erro para o operador. */
 export async function fetchFeedText(config: Pick<FeedConfig, "url" | "timeoutMs">): Promise<FeedFetch> {
-  let parsed: URL;
-  try {
-    parsed = new URL(config.url);
-  } catch {
-    throw new Error("endereço do feed inválido");
-  }
-  if (parsed.protocol !== "https:") throw new Error("o feed precisa ser https");
+  await assertPublicFeedUrl(config.url);
+  let current = new URL(config.url);
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), config.timeoutMs ?? 20_000);
   try {
-    const response = await fetch(parsed, {
-      signal: controller.signal,
-      redirect: "follow",
-      headers: { accept: "application/json, text/csv, text/plain;q=0.9", "user-agent": "TakoStore/0.2 (+https://github.com/lippdev/tako-store)" },
-    });
-    if (!response.ok) throw new Error(`o feed respondeu ${String(response.status)}`);
-    const text = await response.text();
-    if (text.trim() === "") throw new Error("o feed respondeu vazio");
-    return { text, contentType: response.headers.get("content-type") ?? "", url: response.url };
+    for (let hop = 0; hop <= FEED_MAX_REDIRECTS; hop += 1) {
+      if (hop > 0) await assertPublicFeedUrl(current.toString());
+      const response = await fetch(current, {
+        signal: controller.signal,
+        redirect: "manual",
+        headers: { accept: "application/json, text/csv, text/plain;q=0.9", "user-agent": "TakoStore/0.2 (+https://github.com/lippdev/tako-store)" },
+      });
+      if (response.status >= 300 && response.status < 400) {
+        const location = response.headers.get("location");
+        if (location === null || location.trim() === "") throw new Error("o feed redirecionou sem destino");
+        if (hop === FEED_MAX_REDIRECTS) throw new Error("o feed redirecionou demais");
+        current = new URL(location, current);
+        continue;
+      }
+      if (!response.ok) throw new Error(`o feed respondeu ${String(response.status)}`);
+      const text = await response.text();
+      if (text.trim() === "") throw new Error("o feed respondeu vazio");
+      return { text, contentType: response.headers.get("content-type") ?? "", url: response.url || current.toString() };
+    }
+    throw new Error("o feed redirecionou demais");
   } catch (error) {
     if (error instanceof Error && error.name === "AbortError") throw new Error("o feed demorou demais para responder");
     throw error instanceof Error ? error : new Error(String(error));
@@ -121,15 +129,33 @@ export async function fetchFeedText(config: Pick<FeedConfig, "url" | "timeoutMs"
 /** Coleta de um feed: busca, detecta formato, aplica o de-para e valida cada linha. */
 export async function collectFeed(config: FeedConfig, now = new Date()): Promise<ConnectorOutput> {
   const fetched = await fetchFeedText(config);
+  const head = fetched.text.trimStart();
   const format =
     config.format === "auto"
-      ? fetched.contentType.includes("json") || fetched.text.trimStart().startsWith("[") || fetched.text.trimStart().startsWith("{")
+      ? fetched.contentType.includes("json") || head.startsWith("[") || head.startsWith("{")
         ? "json"
-        : "csv"
+        : fetched.contentType.includes("xml") || head.startsWith("<")
+          ? "xml"
+          : "csv"
       : config.format;
 
   let objects: unknown[];
-  if (format === "json") {
+  if (format === "xml") {
+    const { element, records } = xmlRecords(fetched.text);
+    if (records.length === 0) {
+      return {
+        rows: [],
+        errors: [
+          {
+            line: null,
+            code: "xml",
+            message: element === null ? "o feed não é XML válido" : `o XML não tem registros com campos dentro de <${element}>`,
+          },
+        ],
+      };
+    }
+    objects = records;
+  } else if (format === "json") {
     let parsed: unknown;
     try {
       parsed = JSON.parse(fetched.text);

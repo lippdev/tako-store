@@ -1,7 +1,7 @@
 // Catálogo: leitura para a loja e escrita para o painel. As consultas devolvem tipos do domínio, já mapeados.
 
-import type { ActivationPlatform, Game, OperatingSystem, Product, ProductKind } from "@tako/domain";
-import { query, queryOne } from "../pool";
+import type { ActivationPlatform, BulkChange, CatalogEntry, Game, OperatingSystem, Product, ProductKind } from "@tako/domain";
+import { query, queryOne, getPool } from "../pool";
 import { toGame, toProduct, type GameRow, type ProductRow } from "../mappers";
 
 const GAME_COLUMNS = `id, slug, title, original_title, alternative_titles, description, release_date, developers,
@@ -39,6 +39,72 @@ export async function listPublishedGames(): Promise<Game[]> {
 export async function listAllGames(): Promise<Game[]> {
   const rows = await query<GameRow>(`select ${GAME_COLUMNS} from games order by updated_at desc`);
   return rows.map(toGame);
+}
+
+/**
+ * Importação do arquivo de catálogo (PRD §12.2): um jogo por linha do arquivo, em uma transação — ou entra tudo,
+ * ou não entra nada. Cada linha tem o slug para o relatório dizer o que entrou e o que não entrou.
+ */
+export async function applyCatalogImport(
+  entries: readonly CatalogEntry[],
+): Promise<{ applied: string[]; failed: { slug: string; reason: string }[] }> {
+  if (entries.length === 0) return { applied: [], failed: [] };
+  const client = await getPool().connect();
+  const applied: string[] = [];
+  const failed: { slug: string; reason: string }[] = [];
+  try {
+    await client.query("begin");
+    for (const entry of entries) {
+      try {
+        await client.query(
+          `insert into games (slug, title, original_title, alternative_titles, description, release_date, developers,
+             publishers, genres, platforms, operating_systems, published)
+           values ($1, $2, $3, $4, $5, $6::date, $7, $8, $9, $10, $11, $12)
+           on conflict (slug) do update set
+             title = excluded.title,
+             original_title = excluded.original_title,
+             alternative_titles = excluded.alternative_titles,
+             description = coalesce(excluded.description, games.description),
+             release_date = coalesce(excluded.release_date, games.release_date),
+             developers = excluded.developers,
+             publishers = excluded.publishers,
+             genres = excluded.genres,
+             platforms = excluded.platforms,
+             operating_systems = excluded.operating_systems,
+             published = excluded.published,
+             updated_at = now()`,
+          [
+            entry.slug,
+            entry.title,
+            entry.originalTitle,
+            entry.alternativeTitles,
+            entry.description,
+            entry.releaseDate,
+            entry.developers,
+            entry.publishers,
+            entry.genres,
+            entry.platforms,
+            entry.operatingSystems,
+            entry.published,
+          ],
+        );
+        applied.push(entry.slug);
+      } catch (error) {
+        failed.push({ slug: entry.slug, reason: error instanceof Error ? error.message : String(error) });
+      }
+    }
+    if (failed.length > 0) throw new Error(`importação recusou ${String(failed.length)} jogo(s)`);
+    await client.query("commit");
+  } catch (error) {
+    await client.query("rollback");
+    return {
+      applied: [],
+      failed: failed.length > 0 ? failed : [{ slug: "", reason: error instanceof Error ? error.message : String(error) }],
+    };
+  } finally {
+    client.release();
+  }
+  return { applied, failed: [] };
 }
 
 export async function getGameBySlug(slug: string): Promise<Game | null> {
@@ -159,6 +225,26 @@ export async function setGameVisibility(
      where id = $1`,
     [id, change.published ?? null, change.archived ?? null],
   );
+}
+
+/** Alteração em lote (PRD §12.2): a mesma escrita de visibilidade, para os jogos que a prévia escolheu. */
+export async function applyBulkVisibility(
+  ids: readonly string[],
+  change: BulkChange,
+): Promise<number> {
+  if (ids.length === 0) return 0;
+  const rows = await query<{ id: string }>(
+    `update games set
+       published = coalesce($2::boolean, published),
+       archived = coalesce($3::boolean, archived),
+       updated_at = now()
+     where id = any($1::uuid[])
+       and (($2::boolean is not null and $2::boolean is distinct from published)
+         or ($3::boolean is not null and $3::boolean is distinct from archived))
+     returning id`,
+    [ids, change.published ?? null, change.archived ?? null],
+  );
+  return rows.length;
 }
 
 export async function listProducts(options: { publishedOnly?: boolean } = {}): Promise<Product[]> {

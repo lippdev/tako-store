@@ -1,5 +1,14 @@
-import { listAllBanners, listAllGames, listAllSections, listStores } from "@tako/db";
-import { alternarBanner, alternarSecao, removerBanner, removerSecao, salvarBanner, salvarSecao } from "../../actions";
+import { listAllBanners, listAllGames, listAllSections, listDiscountedGames, listHomeVersions, listStores } from "@tako/db";
+import {
+  alternarBanner,
+  alternarSecao,
+  removerBanner,
+  removerSecao,
+  restaurarHome,
+  salvarBanner,
+  salvarRascunhoHome,
+  salvarSecao,
+} from "../../actions";
 import styles from "../../admin.module.css";
 
 export const dynamic = "force-dynamic";
@@ -26,11 +35,13 @@ function descreveRegra(rule: { kind: string } & Record<string, unknown>): string
 /** Gestão da home: seções, regra, ordem, janela e publicação (PRD §12.4). */
 export default async function HomeAdminPage({ searchParams }: { searchParams: Promise<{ ok?: string; erro?: string }> }) {
   const { ok, erro } = await searchParams;
-  const [sections, banners, games, stores] = await Promise.all([
+  const [sections, banners, games, stores, versions, promos] = await Promise.all([
     listAllSections(),
     listAllBanners(),
     listAllGames(),
     listStores(),
+    listHomeVersions(8),
+    listDiscountedGames(),
   ]);
 
   return (
@@ -43,12 +54,23 @@ export default async function HomeAdminPage({ searchParams }: { searchParams: Pr
       </div>
       {(ok !== undefined || erro !== undefined) && (
         <div className={erro === undefined ? styles["ok"] : styles["error"]}>
-          {erro === "banner" ? "Informe o título do banner." : "Home atualizada."}
+          {erro === "banner"
+            ? "Informe o título do banner."
+            : erro === "versao"
+              ? "A versão não existe mais."
+              : ok === "rascunho"
+                ? "Rascunho salvo. A home pública só muda quando você publica."
+                : ok === "restaurada"
+                  ? "Home restaurada para a versão escolhida."
+                  : "Home atualizada."}
         </div>
       )}
 
       <section className={styles["card"]}>
         <h2>Banner principal</h2>
+        <p className={styles["muted"]}>
+          <a href="/admin/home/previa">Pré-visualizar a home</a> — mostra tudo, inclusive o oculto, sem publicar nada.
+        </p>
         <p className={styles["muted"]}>
           A home mostra até três banners publicados, na ordem da posição. Banner sem jogo leva ao catálogo.
         </p>
@@ -115,11 +137,24 @@ export default async function HomeAdminPage({ searchParams }: { searchParams: Pr
               <span>Jogo (opcional)</span>
               <select name="jogoId" defaultValue="">
                 <option value="">Nenhum (leva ao catálogo)</option>
-                {games.map((game) => (
-                  <option key={game.id} value={game.id}>
-                    {game.title}
-                  </option>
-                ))}
+                {promos.length > 0 && (
+                  <optgroup label={`Em promoção agora (${String(promos.length)})`}>
+                    {promos.map((promo) => (
+                      <option key={promo.id} value={promo.id}>
+                        {promo.title} (-{String(promo.discount)}%)
+                      </option>
+                    ))}
+                  </optgroup>
+                )}
+                <optgroup label="Todos os jogos">
+                  {games
+                    .filter((game) => game.published && !game.archived && !promos.some((promo) => promo.id === game.id))
+                    .map((game) => (
+                      <option key={game.id} value={game.id}>
+                        {game.title}
+                      </option>
+                    ))}
+                </optgroup>
               </select>
             </label>
             <label className={styles["field"]}>
@@ -271,6 +306,63 @@ export default async function HomeAdminPage({ searchParams }: { searchParams: Pr
           </div>
         </form>
       </section>
+
+      <section className={styles["card"]}>
+        <h2>Rascunho e histórico</h2>
+        <p className={styles["muted"]}>
+          Salvar um rascunho guarda a home como está agora, sem mudar o que o público vê. Restaurar devolve o estado
+          da versão escolhida e cria uma versão nova com esse estado — o histórico nunca é apagado.
+        </p>
+        <form action={salvarRascunhoHome} className={styles["form"]}>
+          <div className={styles["grid2"]}>
+            <label className={styles["field"]}>
+              <span>Nota do rascunho (opcional)</span>
+              <input name="nota" placeholder="campanha de julho" />
+            </label>
+          </div>
+          <div className={styles["actions"]}>
+            <button type="submit" className={styles["secondary"]}>
+              Salvar rascunho
+            </button>
+          </div>
+        </form>
+        {versions.length === 0 ? (
+          <p className={styles["muted"]}>Nenhuma versão guardada ainda.</p>
+        ) : (
+          <table className={styles["table"]}>
+            <thead>
+              <tr>
+                <th>Quando</th>
+                <th>Quem</th>
+                <th>Nota</th>
+                <th>Estado</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {versions.map((version) => (
+                <tr key={version.id}>
+                  <td className={styles["muted"]}>{new Date(version.createdAt).toLocaleString("pt-BR")}</td>
+                  <td className={styles["muted"]}>{version.savedBy}</td>
+                  <td className={styles["muted"]}>{version.note ?? "—"}</td>
+                  <td className={styles["muted"]}>
+                    {String(version.state.sections.length)} seção(ões) · {String(version.state.banners.length)} banner(s)
+                  </td>
+                  <td>
+                    <form action={restaurarHome}>
+                      <input type="hidden" name="id" value={version.id} />
+                      <button type="submit" className={styles["secondary"]}>
+                        Restaurar
+                      </button>
+                    </form>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </section>
+
     </>
   );
 }

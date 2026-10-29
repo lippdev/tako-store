@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { discountPercent, formatBRL, isValidPrice } from "../src/index";
+import { discountPercent, formatBRL, isAbnormalPriceChange, isValidPrice } from "../src/index";
 
 describe("dinheiro", () => {
   it("formata centavos em reais", () => {
@@ -30,5 +30,14 @@ describe("dinheiro", () => {
     assert.equal(isValidPrice(12.5), false);
     assert.equal(isValidPrice(Number.NaN), false);
     assert.equal(isValidPrice(12_990), true);
+  });
+
+  it("aponta variação anormal só quando o preço cai a um quinto ou sobe cinco vezes", () => {
+    assert.equal(isAbnormalPriceChange(10_000, 1_999), true);
+    assert.equal(isAbnormalPriceChange(10_000, 2_000), false);
+    assert.equal(isAbnormalPriceChange(10_000, 50_001), true);
+    assert.equal(isAbnormalPriceChange(10_000, 50_000), false);
+    assert.equal(isAbnormalPriceChange(10_000, 9_000), false);
+    assert.equal(isAbnormalPriceChange(0, 10_000), false);
   });
 });

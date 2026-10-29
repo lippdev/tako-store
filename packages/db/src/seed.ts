@@ -8,6 +8,7 @@ import {
   createAdminUser,
   migrate,
   query,
+  queryOne,
   startIngestionRun,
   finishIngestionRun,
   upsertBanner,
@@ -29,6 +30,19 @@ function hoursAgo(hours: number): Date {
 
 async function main(): Promise<void> {
   await migrate();
+  // O seed zera TUDO e recoloca o catálogo fictício. Dado real da Steam não pode morrer nisso: com dados reais
+  // presentes, o seed só roda com SEED_DEMO=1 explícito — o mesmo acordo do aviso de demonstração no rodapé.
+  const realData = await queryOne<{ n: number }>(
+    "select count(*)::int as n from external_products ep join sources s on s.id = ep.source_id where s.slug = 'steam'",
+  );
+  if ((realData?.n ?? 0) > 0 && process.env["SEED_DEMO"] !== "1") {
+    console.error(
+      `Este banco tem ${String(realData?.n ?? 0)} produto(s) real(is) da Steam. O seed de demonstração os apagaria.`,
+    );
+    console.error("Para zerar tudo e recolocar o catálogo fictício: SEED_DEMO=1 npm run db:seed");
+    process.exitCode = 1;
+    return;
+  }
   await query(`truncate table offer_clicks, price_observations, ingestion_errors, ingestion_runs, product_mappings,
     external_products, offers, products, external_identifiers, media_assets, games, admin_sessions, admin_users,
     audit_events, home_sections, home_banners, sources, stores restart identity cascade`);
@@ -65,6 +79,16 @@ async function main(): Promise<void> {
     allowedDomains: ["antiga.example"],
   });
 
+  // Loja real: os jogos da Steam são comprados na própria Steam. Fonte pública, sem afiliação ainda.
+  await upsertStore({
+    slug: "steam",
+    name: "Steam",
+    partnerStatus: "pending",
+    allowedDomains: ["store.steampowered.com", "steampowered.com"],
+    linkKind: "direct",
+    attribution: "Preços e disponibilidade: Steam (store.steampowered.com).",
+  });
+
   const demoFile = await upsertSource({
     slug: "arquivo-demo",
     name: "Arquivo de demonstração",
@@ -90,6 +114,22 @@ async function main(): Promise<void> {
     cadenceHours: 6,
     status: "approved",
     attribution: "Dados fictícios gerados pelo próprio projeto.",
+  });
+  // Fonte real: API pública da vitrine da Steam, preços em BRL. É o registro canônico dos jogos dela —
+  // o que ainda não existe no catálogo é criado da própria fonte (autoCreate), oculto até publicar.
+  await upsertSource({
+    slug: "steam",
+    name: "Steam",
+    kind: "api",
+    maxAgeHours: 24,
+    notes: "API pública da vitrine (featuredcategories), região BR. Sem contrato de parceiro; termos de uso comercial a confirmar antes do lançamento público (OPS-003).",
+    access: "api",
+    format: "json",
+    coversBrl: true,
+    cadenceHours: 6,
+    status: "approved",
+    attribution: "Preços e disponibilidade: Steam (store.steampowered.com).",
+    autoCreate: true,
   });
   await upsertSource({
     slug: "fonte-pausada",

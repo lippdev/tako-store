@@ -1,6 +1,13 @@
 import { listIngestionErrorsDetailed, listIngestionRuns, listSources, runsWithOpenErrors } from "@tako/db";
 import { SOURCE_ACCESS_LABELS, SOURCE_STATUS_LABELS, sourceIsUsable, type SourceAccess, type SourceStatus } from "@tako/domain";
-import { alternarFonte, executarImportacao, reprocessarExecucao, salvarFonte, salvarMatrizFonte } from "../../actions";
+import {
+  alternarFonte,
+  desativarOfertasDaFonte,
+  executarImportacao,
+  reprocessarExecucao,
+  salvarFonte,
+  salvarMatrizFonte,
+} from "../../actions";
 import styles from "../../admin.module.css";
 
 export const dynamic = "force-dynamic";
@@ -21,6 +28,7 @@ export default async function FontesPage({
 }: {
   searchParams: Promise<{
     ok?: string;
+    desativadas?: string;
     erro?: string;
     resolvidos?: string;
     tentados?: string;
@@ -29,7 +37,7 @@ export default async function FontesPage({
     detalhe?: string;
   }>;
 }) {
-  const { ok, erro, resolvidos, tentados, aceitas, recusadas, detalhe } = await searchParams;
+  const { ok, erro, resolvidos, tentados, aceitas, recusadas, detalhe, desativadas } = await searchParams;
   const [sources, runs, openRuns] = await Promise.all([listSources(), listIngestionRuns(20), runsWithOpenErrors(10)]);
   const details = await Promise.all(
     openRuns.map(async (run) => ({ run, errors: await listIngestionErrorsDetailed(run.runId) })),
@@ -48,15 +56,25 @@ export default async function FontesPage({
           Reprocessamento concluído: {resolvidos ?? "0"} de {tentados ?? "0"} erro(s) resolvido(s).
         </div>
       )}
+      {ok === "ofertas" && (
+        <div className={styles["ok"]}>
+          {desativadas ?? "0"} oferta(s) desta fonte saíram da comparação. O histórico permanece.
+        </div>
+      )}
       {ok === "executado" && (
         <div className={styles["ok"]}>
           Coleta concluída: {aceitas ?? "0"} oferta(s) gravada(s), {recusadas ?? "0"} linha(s) recusada(s).
         </div>
       )}
-      {ok !== undefined && ok !== "reprocessado" && ok !== "executado" && (
+      {ok !== undefined && ok !== "reprocessado" && ok !== "executado" && ok !== "ofertas" && (
         <div className={styles["ok"]}>Fonte atualizada.</div>
       )}
       {erro === "feed-https" && <div className={styles["error"]}>O feed precisa ser um endereço https.</div>}
+      {erro === "feed-rede" && (
+        <div className={styles["error"]}>
+          O feed precisa ser um https público. Endereço local, IP privado ou nome que não resolve não é aceito.
+        </div>
+      )}
       {erro === "mapa" && (
         <div className={styles["error"]}>Mapa de campos inválido: {detalhe ?? "confira as linhas canonico=campo"}.</div>
       )}
@@ -115,6 +133,12 @@ export default async function FontesPage({
                           Executar agora
                         </button>
                       </form>
+                      <form action={desativarOfertasDaFonte}>
+                        <input type="hidden" name="id" value={source.id} />
+                        <button type="submit" className={styles["secondary"]}>
+                          Desativar ofertas
+                        </button>
+                      </form>
                     </div>
                   </td>
                 </tr>
@@ -128,10 +152,11 @@ export default async function FontesPage({
       <section className={styles["card"]}>
         <h2>Conectar fonte por URL</h2>
         <p className={styles["muted"]}>
-          O parceiro entrega um arquivo JSON ou CSV por URL. O de-para liga o nome do campo na fonte ao campo que a
+          O parceiro entrega um arquivo JSON, CSV ou XML por URL. O de-para liga o nome do campo na fonte ao campo que a
           Tako entende, uma linha por campo: <code>priceCents=preco_centavos</code>. Campos: externalId, title,
           edition, platform, region, currency, priceCents, referencePriceCents, availability, url, coupon,
-          subscription, observedAt, storeSlug. Salvar com o slug de uma fonte existente atualiza aquela fonte.
+          subscription, observedAt, storeSlug. Salvar com o slug de uma fonte existente atualiza aquela fonte. A URL
+          não volta para o formulário: deixe em branco para manter a que já está cadastrada.
         </p>
         <form action={salvarFonte} className={styles["form"]}>
           <div className={styles["grid2"]}>
@@ -145,13 +170,14 @@ export default async function FontesPage({
             </label>
             <label className={styles["field"]}>
               <span>URL do feed (https)</span>
-              <input name="feedUrl" placeholder="https://parceiro.example/feed.csv?token=…" />
+              <input name="feedUrl" placeholder="https://… — em branco mantém a cadastrada" autoComplete="off" />
             </label>
             <label className={styles["field"]}>
               <span>Formato</span>
               <select name="formato" defaultValue="auto">
                 <option value="auto">Detectar pelo conteúdo</option>
                 <option value="json">JSON</option>
+                <option value="xml">XML</option>
                 <option value="csv">CSV</option>
               </select>
             </label>

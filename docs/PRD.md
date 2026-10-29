@@ -295,13 +295,21 @@ A arquitetura deve permitir combinar diferentes tipos de fonte, mas uma integra�
 
 | Fonte | Situação identificada | Próxima ação |
 |---|---|---|
-| **Nuuvem** | Há documentação pública para cadastro no programa de afiliados via Rakuten. Isso não confirma, por si só, a disponibilidade de um feed de preços. | Buscar parceria e verificar acesso a catálogo, BRL, frequência e links. [Material da Nuuvem](https://www.nuuvem.com/lp/pt/nuuvem-coop/regulamento/cadastro-rakuten.pdf) |
-| **Green Man Gaming** | Loja desejada; a pesquisa inicial não confirmou uma API ou feed disponível para este projeto. | Buscar documentação e contato técnico. |
-| **Instant Gaming** | Loja desejada; a pesquisa inicial não confirmou uma API ou feed disponível para este projeto. | Buscar documentação e contato técnico. |
+| **Steam** | API pública da vitrine, sem chave, em BRL. Já conectada e responsável pelo catálogo real. | Confirmar os termos de uso comercial antes do lançamento público (OPS-003). |
+| **Nuuvem** | Possui API oficial documentada (v3, token Bearer, preços em BRL, `steam_app_id` no payload), em beta e restrita a parceiros selecionados. | Pedir acesso ao suporte da Nuuvem; aprovado, conectar como conector oficial. |
+| **Green Man Gaming** | O programa Business Affiliate expõe API de catálogo (7.000+ jogos), direto ou via Admitad. | Buscar aprovação no programa e validar cobertura em BRL, frequência e regras de link. |
+| **Gamivo** | Envia feed XML para comparadores de preço sob pedido (`affiliate@gamivo.com`), após aprovação no programa de afiliados. | Buscar aprovação e cadastrar o feed em `/admin/fontes`. |
+| **Eneba** | Entrega feed XML/CSV após aprovação no programa de afiliados; a API GraphQL é restrita a merchants. | Buscar aprovação no programa de afiliados e validar o feed. |
+| **Fanatical** | Possui MCP oficial público, testado ao vivo (USD para a região BR), feed de afiliados com chave (`feed.fanatical.com`) e programa de afiliados via CJ. | Pedir a chave do feed a `affiliates@fanatical.com`; sem BRL não entra na comparação do Brasil; reavaliar se passar a servir real. |
+| **CDKeys (Loaded)** | Possui programa de afiliados próprio com feed de dados de todo o catálogo, voltado a comparadores de preço; também listada na Awin e na Admitad. | Buscar aprovação no programa (`affiliates@loaded.com`) e validar cobertura em BRL; feed após aprovação. |
+| **Instant Gaming** | Sem API nem feed público; tem programa de indicação no próprio site e caminho pela Admitad (Mitgame, UK/PL/PT). O caminho planejado é o coletor de anunciantes (PAR-005). | Cadastrar-se no programa do site e na Admitad; escolher os canais de anunciantes quando PAR-005 entrar. |
+| **GOG** | Possui programa de afiliados próprio (`affiliate.gog.com`, 6%); o endpoint público de catálogo serve apenas USD. | Cadastrar-se no programa próprio; confirmar cobertura em BRL de feed ou API antes de integrar. |
 | **IsThereAnyDeal** | Possui API de preços, mas seus termos restringem aplicações que possam ser consideradas concorrentes e proíbem alterar dados e tags de afiliado. | Não usar como base da Tako Store sem autorização explícita. [Documentação e termos](https://docs.isthereanydeal.com/) |
 | **GG.deals** | Possui API e informa condições próprias para uso comercial, atribuição e preservação de links. | Avaliar cobertura brasileira, custos, condições e compatibilidade. [API e termos](https://gg.deals/api/) |
 | **CheapShark** | Possui API de jogos e ofertas e utiliza redirecionamento próprio em sua documentação. | Validar cobertura em BRL, parceiros, termos e links antes de usar. [Documentação oficial](https://www.postman.com/cheapshark/cheapshark-s-public-workspace/documentation/7h22uhl/cheapshark-api) |
 | **Projetos open source** | Existem clientes de APIs de ofertas, como o [Game-Deal](https://github.com/criticalsession/game-deal). | Avaliar como referência técnica, conferindo licença e manutenção. Código aberto não garante acesso autorizado aos dados. |
+
+O mapa técnico completo de cada loja (o que fornece, moeda e o que destrava) está em `docs/integracoes.md` §6.
 
 ### Ordem de preferência para obtenção de dados
 
@@ -310,6 +318,25 @@ A arquitetura deve permitir combinar diferentes tipos de fonte, mas uma integra�
 3. Exportação estruturada autorizada.
 4. Integração desenvolvida sob acordo específico.
 5. Coleta de páginas, somente após verificar permissão e viabilidade para aquela fonte.
+
+### Coletor de anunciantes para lojas sem API (Telegram e similares)
+
+Para lojas sem caminho oficial — Instant Gaming, hoje, e qualquer outra enquanto o feed não sai — a coleta não
+raspa a loja: acompanha os próprios anunciantes (vendedores que publicam as ofertas deles, por exemplo em canais
+de Telegram) e converte o anúncio em oferta estruturada. O coletor, além de puxar, adapta o link ao modelo de
+afiliado cadastrado e alimenta a loja como qualquer outra fonte.
+
+Regras do coletor, todas obrigatórias:
+
+1. Só entra oferta com dado real do anúncio: jogo, preço em BRL e link do anunciante. Sem dado, a oferta não é publicada — nada é inventado para preencher.
+2. O link do anúncio só é adaptado pelo template de afiliado cadastrado daquela loja (com `{url}` e domínio na lista permitida). Domínio fora da lista não é publicado.
+3. A compra acontece na loja do anunciante; a Tako Store encaminha, com atribuição visível da fonte.
+4. Vale a mesma régua das outras fontes: preço inteiro em centavos, região, validade, disponibilidade e expiração. O estado da parceria não muda a ordem do menor preço.
+5. Cada canal ou anunciante é cadastrado como fonte (PAR-004), com cadência própria, e pode ser pausado no painel; falha de leitura fica no relatório da execução, com código e linha.
+
+É tarefa difícil de propósito: anúncio é texto livre, chega duplicado, é editado e removido sem aviso — exige
+deduplicação, tolerância a variação e vigilância de validade maiores que uma API. Fica fora da primeira versão
+e entra por decisão do responsável, com os canais escolhidos (backlog PAR-005).
 
 Uma extensão de navegador pode ser estudada no futuro, mas não é necessária para que a loja funcione.
 
@@ -771,6 +798,7 @@ Cada história deve ser dividida novamente caso fique grande demais para uma rev
 - [ ] **OFR-007 — Expiração de ofertas.** Aceite: ofertas vencidas não são apresentadas como preço atual.
 - [ ] **OFR-008 — Primeiro conector real autorizado.** Aceite: importar ofertas válidas para o Brasil com documentação e links corretos.
 - [ ] **OFR-009 — Segunda fonte real autorizada.** Aceite: comparar ofertas reais de produtos equivalentes quando houver cobertura comum.
+- [ ] **PAR-005 — Coletor de anunciantes (Telegram e similares).** P1, fora da primeira versão. Para lojas sem API oficial (Instant Gaming, CDKeys): acompanhar anúncios de vendedores, converter em oferta estruturada em BRL com atribuição e adaptar o link ao template de afiliado cadastrado. Aceite: só entra oferta com dado real do anúncio; domínio fora da lista autorizada não é publicado; o menor preço continua sem favorecimento; cada canal pode ser pausado no painel e as falhas aparecem no relatório da execução. Regras completas em §9.
 
 ### Fase 3 — Loja pública
 
@@ -800,6 +828,23 @@ Cada história deve ser dividida novamente caso fique grande demais para uma rev
 - [ ] **EXP-007 — Extensão de navegador.** P2.
 
 ## 21. Dependências e riscos de implementação
+
+### Dependências que aguardam o responsável
+
+O que já pode avançar depende de acesso, aprovação ou decisão que só o responsável pode dar. Cada ponto destrava
+um pedaço já construído à espera de chave:
+
+| Ponto | O que destrava |
+|---|---|
+| Pedido de acesso à API da Nuuvem (beta, parceiros selecionados) | Segunda fonte real com API oficial em BRL (OFR-009). |
+| Aprovação nos programas de afiliados (Eneba, Green Man Gaming, Gamivo) | Feed/catálogo oficial dessas lojas; cadastro em `/admin/fontes`. |
+| Confirmação dos termos de uso comercial da Steam | Lançamento público com o catálogo Steam (OPS-003). |
+| Hospedagem e domínio | Publicação inicial (OPS-004). |
+| Proteção de branch de `main` e `develop` (admin do repositório no GitHub) | WEB-004 completa (CI já protege por verificação, mas as branches ficam desprotegidas a pushes manuais). |
+| Escolha dos canais de anunciantes (Telegram e similares) | PAR-005, o coletor para as lojas sem API. |
+| Chaves, tokens e URLs de feed quando as parcerias aprovarem | Ativar as fontes candidatas sem mudança de código. |
+
+O mapa técnico de cada loja, com o que fornece e o que destrava, está em `docs/integracoes.md` §6.
 
 | Dependência ou risco | Tratamento |
 |---|---|

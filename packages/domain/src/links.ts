@@ -39,6 +39,23 @@ export function isAllowedRedirect({ url, storeAllowedDomains }: RedirectTarget):
   });
 }
 
+/**
+ * Tira query, fragmento, usuário e senha antes de gravar uma URL em log ou auditoria.
+ * O host fica — é o que o operador precisa ver. O token que costuma vir na query não fica.
+ */
+export function redactUrl(url: string): string {
+  try {
+    const parsed = new URL(url);
+    parsed.username = "";
+    parsed.password = "";
+    parsed.search = "";
+    parsed.hash = "";
+    return parsed.toString();
+  } catch {
+    return "[endereço inválido]";
+  }
+}
+
 /** Limpa o domínio cadastrado: minúsculas, sem esquema, sem barra final, sem caminho. */
 export function normalizeDomain(value: string): string {
   return value

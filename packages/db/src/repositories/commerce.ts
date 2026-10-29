@@ -9,7 +9,7 @@ const STORE_COLUMNS = `id, slug, name, partner_status, enabled, allowed_domains,
   currencies, affiliate_param, affiliate_value, affiliate_template`;
 const SOURCE_COLUMNS = `id, slug, name, kind, enabled, max_age_hours, regions, currencies, notes, access, format,
   covers_brl, cadence_hours, docs_url, terms_url, attribution, status, last_run_at, consecutive_failures, feed_url,
-  field_map`;
+  field_map, auto_create`;
 const OFFER_COLUMNS = `id, product_id, store_id, source_id, price_cents, reference_price_cents, currency, region,
   platform, availability, coupon, subscription, url, observed_at`;
 
@@ -110,13 +110,14 @@ export interface SourceInput {
   status?: Source["status"];
   feedUrl?: string | null;
   fieldMap?: Record<string, string>;
+  autoCreate?: boolean;
 }
 
 export async function upsertSource(input: SourceInput): Promise<Source> {
   const row = await queryOne<SourceRow>(
     `insert into sources (slug, name, kind, enabled, max_age_hours, regions, currencies, notes, access, format,
-       covers_brl, cadence_hours, docs_url, terms_url, attribution, status, feed_url, field_map)
-     values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
+       covers_brl, cadence_hours, docs_url, terms_url, attribution, status, feed_url, field_map, auto_create)
+     values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
      on conflict (slug) do update set
        name = excluded.name,
        kind = excluded.kind,
@@ -135,6 +136,7 @@ export async function upsertSource(input: SourceInput): Promise<Source> {
        status = excluded.status,
        feed_url = excluded.feed_url,
        field_map = excluded.field_map,
+       auto_create = excluded.auto_create,
        updated_at = now()
      returning ${SOURCE_COLUMNS}`,
     [
@@ -156,6 +158,7 @@ export async function upsertSource(input: SourceInput): Promise<Source> {
       input.status ?? "candidate",
       input.feedUrl ?? null,
       JSON.stringify(input.fieldMap ?? {}),
+      input.autoCreate ?? false,
     ],
   );
   if (row === null) throw new Error("upsert de fonte não devolveu linha");
@@ -198,6 +201,20 @@ export async function updateSourceMatrix(
 
 export async function setSourceEnabled(id: string, enabled: boolean): Promise<void> {
   await query("update sources set enabled = $2, updated_at = now() where id = $1", [id, enabled]);
+}
+
+/**
+ * Tira as ofertas atuais de uma fonte da comparação (PRD §12.6). O histórico fica.
+ * Oferta indisponível não disputa o menor preço; a próxima coleta pode trazê-la de volta.
+ */
+export async function disableSourceOffers(sourceId: string): Promise<number> {
+  const rows = await query<{ id: string }>(
+    `update offers set availability = 'unavailable', updated_at = now()
+     where source_id = $1 and availability <> 'unavailable'
+     returning id`,
+    [sourceId],
+  );
+  return rows.length;
 }
 
 export interface OfferInput {
@@ -630,6 +647,26 @@ export async function approvedProductFor(externalProductId: string): Promise<str
   return row?.product_id ?? null;
 }
 
+/**
+ * Jogos publicados com oferta em promoção agora: preço com referência confiável maior que o atual, observação
+ * dentro da validade (OFR-007). Alimenta o seletor de banners do painel — destacar promoção é escolher da lista,
+ * não decorar identificador.
+ */
+export async function listDiscountedGames(): Promise<{ id: string; title: string; discount: number }[]> {
+  return query<{ id: string; title: string; discount: number }>(
+    `select g.id, g.title,
+            max(round(100 - (o.price_cents * 100.0 / o.reference_price_cents)))::int as discount
+     from games g
+     join products p on p.game_id = g.id and p.kind = 'base'
+     join offers o on o.product_id = p.id
+     where g.published and g.archived = false
+       and o.reference_price_cents > o.price_cents
+       and o.observed_at > now() - make_interval(hours => coalesce(nullif((select max_age_hours from sources s where s.id = o.source_id), 0), 24))
+     group by g.id, g.title
+     order by discount desc, g.title`,
+  );
+}
+
 /** Fontes com coleta devida agora: ativas, aprovadas e fora do intervalo desde a última execução (OFR-004). */
 export async function listDueSources(now = new Date()): Promise<Source[]> {
   const rows = await query<SourceRow>(
@@ -640,4 +677,22 @@ export async function listDueSources(now = new Date()): Promise<Source[]> {
     [now],
   );
   return rows.map(toSource);
+}
+
+/**
+ * Apps da fonte ordenados pela observação mais antiga, para a atualização periódica do catálogo da Steam
+ * (OFR-007: preço vencido não é preço — quem não é atualizado a tempo sai da comparação). O appid sai da
+ * URL canônica da oferta (`/app/<id>/`); ofertas sem appid na URL ficam fora da fila.
+ */
+export async function listSourceAppIdsOldestFirst(sourceSlug: string, limit: number): Promise<string[]> {
+  const rows = await query<{ appid: string }>(
+    `select (regexp_match(o.url, '/app/(\\d+)/'))[1] as appid, min(o.observed_at) as observada
+     from offers o join sources s on s.id = o.source_id
+     where s.slug = $1 and o.url is not null
+     group by 1
+     order by observada asc, appid
+     limit $2`,
+    [sourceSlug, limit],
+  );
+  return rows.map((row) => row.appid).filter((appid): appid is string => appid !== undefined && appid !== null);
 }

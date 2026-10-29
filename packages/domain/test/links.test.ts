@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { isAllowedRedirect, normalizeDomain } from "../src/index";
+import { isAllowedRedirect, normalizeDomain, redactUrl } from "../src/index";
 
 describe("redirecionamento", () => {
   const allowed = ["nuuvem.com.br"];
@@ -33,6 +33,17 @@ describe("redirecionamento", () => {
     const url = "https://nuuvem.com.br/item/1?utm_source=tako&cupom=X";
     assert.equal(isAllowedRedirect({ url, storeAllowedDomains: allowed }), true);
     assert.equal(new URL(url).searchParams.get("utm_source"), "tako");
+  });
+});
+
+describe("URL em log", () => {
+  it("guarda o host e tira o token da query", () => {
+    assert.equal(
+      redactUrl("https://parceiro.example/feed.csv?token=segredo&id=1"),
+      "https://parceiro.example/feed.csv",
+    );
+    assert.equal(redactUrl("https://user:senha@loja.example/a#frag"), "https://loja.example/a");
+    assert.equal(redactUrl("não é url"), "[endereço inválido]");
   });
 });
 

@@ -9,3 +9,4 @@ export * from "./repositories/quality";
 export * from "./repositories/media";
 export * from "./repositories/curation";
 export { migrate, migrationFiles } from "./migrate";
+export * from "./retention";

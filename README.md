@@ -3,10 +3,11 @@
 Loja web de jogos e comparador de preços do ecossistema [Tako](https://github.com/lippdev/tako-launcher). O usuário
 descobre jogos, compara ofertas válidas para o Brasil e conclui a compra no site da loja escolhida.
 
-**Status: fases 0 a 3 e a operação da fase 4 entregues com dados fictícios.** Catálogo, ofertas, painel
-administrativo, importação com reprocessamento, loja pública, monitoramento e backup funcionam de ponta a ponta. As
-integrações reais de loja (OFR-008/009) dependem de acesso a parceiros; a publicação (OPS-004) depende de hospedagem e
-domínio.
+**Status: loja rodando com catálogo real da Steam (736 jogos com preço em BRL).** Catálogo, ofertas, painel
+administrativo, importação com reprocessamento, loja pública, monitoramento e backup funcionam de ponta a ponta. O
+catálogo de demonstração foi arquivado. As demais integrações reais (OFR-009) esperam aprovação de afiliados — a
+lista de cadastros está em [`docs/integracoes.md`](docs/integracoes.md) §7 — e a publicação (OPS-004) depende de
+hospedagem e domínio.
 
 - Produto, escopo e regras de preço: [`docs/PRD.md`](docs/PRD.md)
 - Decisões com contexto: [`docs/adr/`](docs/adr/)
@@ -24,9 +25,11 @@ domínio.
 | Importação | Contrato de conector, feed por URL (JSON/CSV) com de-para de campos, arquivo local, erro por linha, reprocessamento pelo painel e agendador que respeita a cadência |
 | Loja pública | Home com carrossel de destaques, catálogo com filtros na URL, página do jogo com galeria e histórico de preço, busca com sugestões, redirecionamento com link de afiliado, sitemap |
 | Operação | `/api/health` com sinal de degradação, monitor em `scripts/healthcheck.mjs`, backup e restauração provados |
-| Integrações reais | **Não**: depende de acesso e contrato com as lojas (PRD §9) |
+| Integrações reais | **Steam, em produção no catálogo**: API pública da vitrine em BRL, rastreio amplo por prioridade do SteamSpy; as demais lojas esperam aprovação de afiliados (mapa em `docs/integracoes.md` §6 e §7) |
 
-Todos os dados do seed são fictícios: lojas, jogos, preços e imagens de demonstração. O rodapé da loja diz isso.
+Todos os dados do seed são fictícios: lojas, jogos, preços e imagens de demonstração. O rodapé da loja diz isso
+(`DEMO_CATALOG=0` em `apps/web/.env.local` desliga o aviso quando há dado real — é o estado atual). O seed se recusa
+a apagar o catálogo real da Steam sem `SEED_DEMO=1`, e as ofertas reais não são apresentadas como demonstração.
 
 ## Rodar
 
@@ -58,6 +61,9 @@ Importação pelo worker:
 npm run worker -- sources                        # fontes, situação na matriz e conector disponível
 npm run worker -- runs                           # últimas execuções e erros abertos
 npm run worker -- import --source arquivo-demo   # importa a fonte de demonstração
+npm run worker -- import --source steam          # coleta os destaques da vitrine da Steam (BRL)
+npm run worker -- crawl --source steam --topo N  # rastreio amplo: prioridade do SteamSpy, pulando conhecidos
+npm run worker -- sync --source steam [--lote 250] # reconsulta o lote com a observação mais antiga (renova preços)
 npm run worker -- import --source arquivo-demo --file ./catalogo.csv
 npm run worker -- retry --run <id>               # reprocessa os erros de uma execução
 npm run worker -- due                            # uma passada pelas fontes com coleta devida

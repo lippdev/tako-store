@@ -9,3 +9,5 @@ export * from "./affiliate";
 export * from "./history";
 export * from "./duplicates";
 export * from "./media";
+export * from "./catalog-file";
+export * from "./bulk";
