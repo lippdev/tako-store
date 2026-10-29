@@ -101,8 +101,9 @@ ofertas e lançamentos em um pedido só, já com preço em BRL, desconto, capa o
   própria fonte (título e capa oficiais) e **nasce publicado** — esconder em lote é do painel (`/admin/jogos`).
 - **Coleta**: `npm run worker -- import --source steam`, botão "Executar agora" no painel, ou o agendador
   (`due`/`daemon`, cadência de 6 h). Sem preço (gratuito, em breve) e moeda fora do BRL são recusados com código.
-- **Capa**: a retrata 2:3 da biblioteca Steam (`library_600x900`), com a paisagem da vitrine de reserva para os
-  apps sem a peça no CDN — ver [ADR-0004](adr/0004-capas-retrato-da-biblioteca-steam.md).
+- **Arte do jogo**: capa retrata 2:3 da biblioteca (`library_600x900`) para o card e a página do jogo, e faixa de
+  herói larga (`library_hero`, 1920×620) para o banner da home — cada consumo na própria proporção, com as peças
+  menores de reserva. Ver [ADR-0004](adr/0004-arte-da-steam-na-proporcao-de-cada-consumo.md).
 - **Termos**: a API é pública, mas o uso comercial precisa de confirmação antes do lançamento público (OPS-003).
   A atribuição "Preços e disponibilidade: Steam" acompanha a oferta.
 

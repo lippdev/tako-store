@@ -113,8 +113,8 @@ export function capaDeBiblioteca(appid: number | string): string {
   return `https://steamcdn-a.akamaihd.net/steam/apps/${String(appid)}/library_600x900.jpg`;
 }
 
-/** Peças de arte da biblioteca da Steam, por app, na ordem do consumo: herói do banner e cabeça da biblioteca. */
-export function pecaDaBiblioteca(appid: number | string, peca: "hero_capsule" | "library_header"): string {
+/** Peças de arte da biblioteca da Steam, por app: a faixa de herói e a cabeça da biblioteca. */
+export function pecaDaBiblioteca(appid: number | string, peca: "library_hero" | "library_header"): string {
   return `https://steamcdn-a.akamaihd.net/steam/apps/${String(appid)}/${peca}.jpg`;
 }
 
@@ -134,12 +134,15 @@ export async function capaNoFormatoDoCartao(appid: number | string, reserva: str
 }
 
 /**
- * Herói do banner, na ordem da peça certa: a cápsula de herói da biblioteca (1920×620, feita para faixas largas),
- * depois a cabeça da biblioteca (920×430); a cabeça pequena da vitrine fica de reserva. Medição de 10/2026:
- * hero_capsule existe para ~80% dos apps, library_header cobre parte do resto.
+ * Herói do banner na peça certa: a arte de herói da biblioteca (`library_hero`, 1920×620) é a faixa larga oficial
+ * da Steam — presente em toda a amostra medida (40/40 em 10/2026, inclusive títulos antigos). A cabeça da
+ * biblioteca (920×430) cobre o resto e a cabeça da vitrine (460×215) fica de última reserva.
+ *
+ * A `hero_capsule` **não** entra: medida em 374×448, é peça retrata de grade — colocá-la numa faixa larga é
+ * exatamente o desencontro de proporção que o banner não pode ter.
  */
 export async function heroNoFormatoDoBanner(appid: number | string, reserva: string | null): Promise<string | null> {
-  for (const peca of ["hero_capsule", "library_header"] as const) {
+  for (const peca of ["library_hero", "library_header"] as const) {
     const url = pecaDaBiblioteca(appid, peca);
     if (await existeNoCdn(url)) return url;
   }
