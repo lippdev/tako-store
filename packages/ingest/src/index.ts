@@ -80,6 +80,7 @@ async function createGameFromSource(cache: RunCache, row: RawOffer): Promise<str
     slug,
     title: row.title,
     coverUrl: row.coverUrl ?? null,
+    heroUrl: row.heroUrl ?? null,
     description: row.description ?? null,
     genres: row.genres ?? [],
     platforms: [row.platform],
@@ -162,6 +163,18 @@ async function persistRow(cache: RunCache, source: Source, row: RawOffer): Promi
       error: { line: null, code: "vinculo-pendente", message: `"${row.title}" aguarda vínculo no painel` },
       payload: row,
     };
+  }
+
+  // Arte herói que faltou na criação: o jogo do vínculo aprovado ganha a peça quando ainda não tem.
+  if (row.heroUrl != null && row.heroUrl !== "") {
+    const produto = cache.products.find((candidate) => candidate.id === productId);
+    const jogo = produto === undefined ? undefined : cache.games.find((candidate) => candidate.id === produto.gameId);
+    if (jogo !== undefined && jogo.media.hero == null) {
+      await updateGame(jogo.id, { heroUrl: row.heroUrl });
+      cache.games = cache.games.map((candidate) =>
+        candidate.id === jogo.id ? { ...candidate, media: { ...candidate.media, hero: row.heroUrl ?? null } } : candidate,
+      );
+    }
   }
 
   await upsertOffer({

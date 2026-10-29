@@ -141,6 +141,7 @@ export function steamRow(item: SteamFeaturedItem, observedAt: string): Record<st
     url: `https://store.steampowered.com/app/${String(item.id)}/`,
     storeSlug: "steam",
     coverUrl: item.header_image,
+    heroUrl: item.header_image,
     observedAt,
   };
 }
@@ -231,6 +232,7 @@ export async function steamAppDetails(
         appid,
         typeof app["header_image"] === "string" ? app["header_image"] : null,
       ),
+      heroUrl: typeof app["header_image"] === "string" ? app["header_image"] : null,
       description: typeof app["short_description"] === "string" ? stripHtml(app["short_description"]) : null,
       genres,
       operatingSystems: sistemas,
