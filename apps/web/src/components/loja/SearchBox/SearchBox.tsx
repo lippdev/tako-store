@@ -112,7 +112,7 @@ export function SearchBox() {
                   setActive(index);
                 }}
               >
-                {item.cover !== null && <img src={item.cover} alt="" width={28} height={38} />}
+                {item.cover !== null && <img src={item.cover} alt="" width={28} height={42} />}
                 <span>{item.title}</span>
                 <span className={styles["price"]}>{item.price ?? "sem oferta"}</span>
               </button>
