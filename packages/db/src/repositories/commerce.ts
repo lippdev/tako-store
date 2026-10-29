@@ -647,6 +647,26 @@ export async function approvedProductFor(externalProductId: string): Promise<str
   return row?.product_id ?? null;
 }
 
+/**
+ * Jogos publicados com oferta em promoção agora: preço com referência confiável maior que o atual, observação
+ * dentro da validade (OFR-007). Alimenta o seletor de banners do painel — destacar promoção é escolher da lista,
+ * não decorar identificador.
+ */
+export async function listDiscountedGames(): Promise<{ id: string; title: string; discount: number }[]> {
+  return query<{ id: string; title: string; discount: number }>(
+    `select g.id, g.title,
+            max(round(100 - (o.price_cents * 100.0 / o.reference_price_cents)))::int as discount
+     from games g
+     join products p on p.game_id = g.id and p.kind = 'base'
+     join offers o on o.product_id = p.id
+     where g.published and g.archived = false
+       and o.reference_price_cents > o.price_cents
+       and o.observed_at > now() - make_interval(hours => coalesce(nullif((select max_age_hours from sources s where s.id = o.source_id), 0), 24))
+     group by g.id, g.title
+     order by discount desc, g.title`,
+  );
+}
+
 /** Fontes com coleta devida agora: ativas, aprovadas e fora do intervalo desde a última execução (OFR-004). */
 export async function listDueSources(now = new Date()): Promise<Source[]> {
   const rows = await query<SourceRow>(
