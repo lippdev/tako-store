@@ -190,3 +190,18 @@ explicitamente.
 
 **Estado do mapa:** a Steam já está conectada; a Fanatical responde USD para a região BR (não entra na
 comparação do Brasil até servir BRL); a Epic Games não tem API nem programa que exponha preços.
+
+## 8. Coletor de anunciantes: o que reaproveitar (pesquisa de 29/10/2026)
+
+Para o PAR-005 (lojas sem API — Instant Gaming, CDKeys — via anúncios de revendedores), a camada de coleta existe
+em open-source; ninguém tem o fim a fim. O que se reaproveita:
+
+| Projeto | Licença | O que entrega | Papel no PAR-005 |
+| :- | :- | :- | :- |
+| [HaumeaCupons](https://github.com/riique/HaumeaCupons) | MIT | Telethon lendo grupos do Telegram, extração de preço/título/link/cupom do texto livre, classificação com confiança, dedup por hash, auditoria, painel + API | **Coletor**: roda como processo próprio; as ofertas aprovadas dele entram na nossa importação (feed/endpoint) |
+| [RSS-Bridge — TelegramBridge](https://github.com/RSS-Bridge/rss-bridge) | MIT (aggregated) | Canal público vira feed pela prévia de `t.me/s/<canal>`, sem conta nem API | Alternativa leve: só ~20 posts recentes, só canais públicos |
+| [Telethon](https://docs.telethon.dev) / [teleproto](https://github.com/teleproto/teleproto) | MIT | Cliente MTProto (histórico completo, canais privados) | Alternativa completa: exige `api_id`/`api_hash` do responsável em `my.telegram.org` |
+
+O que ninguém tem pronto: anúncio → oferta estruturada em BRL → link de afiliado → comparador. Essa parte é
+nossa e já existe: validador com código por linha, vínculo com o catálogo, menor preço sem favorecimento e o link
+de afiliado montado no servidor no clique (`/ir/<oferta>` com o molde da loja).
