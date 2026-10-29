@@ -338,6 +338,28 @@ Regras do coletor, todas obrigatórias:
 deduplicação, tolerância a variação e vigilância de validade maiores que uma API. Fica fora da primeira versão
 e entra por decisão do responsável, com os canais escolhidos (backlog PAR-005).
 
+### O que já existe pronto para reaproveitar (pesquisa de 29/10/2026)
+
+A camada de coleta não precisa nascer do zero — existe open-source, inclusive brasileiro:
+
+- **HaumeaCupons** ([github.com/riique/HaumeaCupons](https://github.com/riique/HaumeaCupons), MIT): monitora
+  grupos do Telegram com Telethon, extrai preço, título, links, cupons e loja do texto livre, classifica por
+  regras ou sinais estruturais com confiança, deduplica por chat/mensagem/hash, audita decisões e expõe painel
+  e API. É a camada de coleta do PAR-005 quase inteira. Plano: rodá-lo como coletor próprio e integrar as
+  ofertas aprovadas dele à nossa importação (feed/endpoint) — a validação de oferta, o BRL, o vínculo com o
+  catálogo e a adaptação de link de afiliado seguem sendo nossos (o link sai pelo nosso `/ir/` com o template
+  da loja no clique).
+- **RSS-Bridge — TelegramBridge** ([github.com/RSS-Bridge/rss-bridge](https://github.com/RSS-Bridge/rss-bridge)):
+  canal público do Telegram vira feed estruturado pela prévia pública de `t.me/s/<canal>`, sem conta e sem API.
+  Limitação: só os ~20 posts mais recentes e só canais públicos.
+- **Telethon** ([docs.telethon.dev](https://docs.telethon.dev)) ou o fork mantido do GramJS: cliente MTProto para
+  histórico completo e canais privados — exige `api_id`/`api_hash` do responsável em `my.telegram.org`.
+
+O que a pesquisa **não** encontrou: nenhum projeto que faça o fim a fim (anúncio de revendedor → oferta
+estruturada em BRL → link de afiliado → comparador). Os bots de ofertas que existem fazem o caminho inverso
+(agregam APIs e publicam em canal). A parte de cá — validação, vínculo, comparação e link — já está pronta
+neste repositório.
+
 Uma extensão de navegador pode ser estudada no futuro, mas não é necessária para que a loja funcione.
 
 ## 10. Regras de comparação de preços
