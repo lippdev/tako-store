@@ -25,6 +25,8 @@ export interface RawOffer {
   storeSlug: string;
   /** Capa oficial do jogo na fonte, quando a fonte entrega. Usada quando a fonte cria o jogo. */
   coverUrl?: string | null;
+  /** Arte herói oficial (paisagem), quando a fonte entrega. Preenche o jogo que chegou sem ela. */
+  heroUrl?: string | null;
   /** Descrição curta oficial, quando a fonte entrega. */
   description?: string | null;
   /** Data de lançamento informada pela fonte, sem formato garantido; o editor corrige depois. */
@@ -143,6 +145,7 @@ export function validateOfferRow(input: unknown, line: number | null): Validatio
       observedAt: text("observedAt") || text("observadoEm") || null,
       storeSlug,
       coverUrl: text("coverUrl") || text("capa") || null,
+      heroUrl: text("heroUrl") || text("heroi") || null,
       description: text("description") || text("descricao") || null,
       releaseDate: text("releaseDate") || null,
       genres: Array.isArray(row["genres"])
