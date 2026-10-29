@@ -63,6 +63,7 @@ npm run worker -- runs                           # últimas execuções e erros 
 npm run worker -- import --source arquivo-demo   # importa a fonte de demonstração
 npm run worker -- import --source steam          # coleta os destaques da vitrine da Steam (BRL)
 npm run worker -- crawl --source steam --topo N  # rastreio amplo: prioridade do SteamSpy, pulando conhecidos
+npm run worker -- sync --source steam [--lote 250] # reconsulta o lote com a observação mais antiga (renova preços)
 npm run worker -- import --source arquivo-demo --file ./catalogo.csv
 npm run worker -- retry --run <id>               # reprocessa os erros de uma execução
 npm run worker -- due                            # uma passada pelas fontes com coleta devida

@@ -658,3 +658,21 @@ export async function listDueSources(now = new Date()): Promise<Source[]> {
   );
   return rows.map(toSource);
 }
+
+/**
+ * Apps da fonte ordenados pela observação mais antiga, para a atualização periódica do catálogo da Steam
+ * (OFR-007: preço vencido não é preço — quem não é atualizado a tempo sai da comparação). O appid sai da
+ * URL canônica da oferta (`/app/<id>/`); ofertas sem appid na URL ficam fora da fila.
+ */
+export async function listSourceAppIdsOldestFirst(sourceSlug: string, limit: number): Promise<string[]> {
+  const rows = await query<{ appid: string }>(
+    `select (regexp_match(o.url, '/app/(\\d+)/'))[1] as appid, min(o.observed_at) as observada
+     from offers o join sources s on s.id = o.source_id
+     where s.slug = $1 and o.url is not null
+     group by 1
+     order by observada asc, appid
+     limit $2`,
+    [sourceSlug, limit],
+  );
+  return rows.map((row) => row.appid).filter((appid): appid is string => appid !== undefined && appid !== null);
+}

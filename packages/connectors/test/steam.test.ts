@@ -1,7 +1,34 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { capaDeBiblioteca, steamConnector, steamFeaturedItems, steamRow } from "../src/steam";
+import { capaDeBiblioteca, steamConnector, steamFeaturedItems, steamRefresh, steamRow } from "../src/steam";
+
+const APPDETALHES = {
+  "42420": {
+    success: true,
+    data: {
+      type: "game",
+      name: "Celebration of Life",
+      price_overview: { currency: "BRL", initial: 1999, final: 999 },
+      header_image: "https://shared.akamai.steamstatic.com/header.jpg",
+      short_description: "<p>Uma jornada breve sobre memória.</p>",
+      genres: [{ description: "Puzzle" }],
+      platforms: { windows: true, mac: false, linux: false },
+    },
+  },
+  "620": {
+    success: true,
+    data: {
+      type: "game",
+      name: "Portal 2",
+      price_overview: { currency: "BRL", initial: 2999, final: 499 },
+      header_image: "https://shared.akamai.steamstatic.com/portal.jpg",
+      short_description: "Física de portais.",
+      genres: [],
+      platforms: { windows: true, mac: true, linux: true },
+    },
+  },
+};
 
 const FEATURED = {
   top_sellers: {
@@ -91,8 +118,7 @@ test("falha da Steam vira erro com mensagem, não exceção crua", async () => {
   }
 });
 
-test("capa do cartão vem da biblioteca (2:3) quando a peça existe", async () => {
-  const original = globalThis.fetch;
+test("capa do cartão vem da biblioteca (2:3) quando a peça existe", async () => {  const original = globalThis.fetch;
   globalThis.fetch = (async (_url, init) =>
     init?.method === "HEAD"
       ? new Response(null, { status: 200 })
@@ -120,6 +146,50 @@ test("sem arte de biblioteca, a capa é a da vitrine", async () => {
       result.rows.find((row) => row.externalId === "4115450")?.coverUrl,
       "https://shared.akamai.steamstatic.com/header.jpg",
     );
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+test("atualização reconsulta os apps dados e recusa o sem preço sem parar", async () => {
+  const original = globalThis.fetch;
+  const pedidos: string[] = [];
+  globalThis.fetch = (async (url, init) => {
+    const endereco = String(url);
+    if (init?.method !== "HEAD") pedidos.push(endereco);
+    const appid = endereco.match(/appids=(\d+)/)?.[1] ?? "";
+    if (init?.method === "HEAD") return new Response(null, { status: 200 });
+    if (appid === "42420") return new Response(JSON.stringify({ "42420": APPDETALHES["42420"] }), { status: 200, headers: { "content-type": "application/json" } });
+    return new Response(JSON.stringify({ "620": { success: true, data: { type: "game", name: "Sem preço", price_overview: { currency: "BRL", initial: 0, final: 0 } } } }), { status: 200, headers: { "content-type": "application/json" } });
+  }) as typeof fetch;
+  try {
+    const result = await steamRefresh([42420, 620], 1);
+    assert.equal(result.rows.length, 1);
+    assert.equal(result.rows[0]?.externalId, "42420");
+    // o sem preço é recusa silenciosa (gratuito é esperado), e a passada não para por isso
+    assert.deepEqual(result.errors, []);
+    assert.equal(pedidos.length, 2);
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+test("limite da vitrine para a passada de atualização", async () => {
+  const original = globalThis.fetch;
+  const pedidos: string[] = [];
+  globalThis.fetch = (async (url, init) => {
+    const endereco = String(url);
+    if (init?.method !== "HEAD") pedidos.push(endereco);
+    if (init?.method === "HEAD") return new Response(null, { status: 200 });
+    if (pedidos.length === 1) return new Response("lento", { status: 429 });
+    return new Response(JSON.stringify(APPDETALHES["620"]), { status: 200, headers: { "content-type": "application/json" } });
+  }) as typeof fetch;
+  try {
+    const result = await steamRefresh([620, 42420], 1);
+    assert.deepEqual(result.rows, []);
+    assert.deepEqual(result.errors.map((error) => error.code), ["limite"]);
+    // parou no primeiro: o segundo app não foi consultado
+    assert.equal(pedidos.filter((pedido) => pedido.includes("appdetails")).length, 1);
   } finally {
     globalThis.fetch = original;
   }
