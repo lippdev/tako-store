@@ -149,6 +149,31 @@ export async function heroNoFormatoDoBanner(appid: number | string, reserva: str
   return reserva;
 }
 
+/** Rank da arte da Steam no CDN: a peça de biblioteca vale mais que a cabeça pequena da vitrine. */
+function rankDaArte(url: string | null | undefined): number {
+  if (url == null) return 0;
+  if (url.includes("/library_hero.")) return 3;
+  if (url.includes("/library_header.")) return 2;
+  if (url.includes("/header.")) return 1;
+  return 0;
+}
+
+/**
+ * A arte do catálogo só melhora: preenche quando falta, promove a cabeça pequena da vitrine para uma peça de
+ * biblioteca, e **nunca rebaixa** o que já está gravado — uma falha passageira de rede na conferência do CDN não
+ * pode piorar a arte (era assim que um jogo ficava preso na reserva). Arte que não é da Steam (escolha manual no
+ * painel) fica intocada.
+ */
+export function pecaDeArteMelhor(atual: string | null | undefined, nova: string | null | undefined): boolean {
+  if (nova == null || nova === "") return false;
+  const rankNova = rankDaArte(nova);
+  if (rankNova === 0) return false;
+  if (atual == null || atual === "") return true;
+  const rankAtual = rankDaArte(atual);
+  // Só troca arte que veio da própria Steam, e só por uma peça de rank maior.
+  return rankAtual > 0 && rankNova > rankAtual;
+}
+
 /** Item da vitrine na forma que o validador entende. Moeda fora do BRL e preço zero são recusados no validador. */
 export function steamRow(item: SteamFeaturedItem, observedAt: string): Record<string, unknown> {
   return {
