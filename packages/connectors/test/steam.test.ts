@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import {
   capaDeBiblioteca,
   pecaDaBiblioteca,
+  pecaDeArteMelhor,
   steamConnector,
   steamAppDetails,
   steamFeaturedItems,
@@ -245,4 +246,25 @@ test("limite da vitrine para a passada de atualização", async () => {
   } finally {
     globalThis.fetch = original;
   }
+});
+
+test("a arte do catálogo só melhora: nunca rebaixa e não toca em arte manual", () => {
+  const capa = capaDeBiblioteca(42420);
+  const faixa = pecaDaBiblioteca(42420, "library_hero");
+  const cabeca = pecaDaBiblioteca(42420, "library_header");
+  const vitrine = "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/42420/hash/header.jpg";
+  // preenche o que falta
+  assert.equal(pecaDeArteMelhor(null, faixa), true);
+  // promove a reserva para a peça própria
+  assert.equal(pecaDeArteMelhor(vitrine, faixa), true);
+  assert.equal(pecaDeArteMelhor(vitrine, cabeca), true);
+  // nunca rebaixa — falha passageira de rede não piora o que já está gravado
+  assert.equal(pecaDeArteMelhor(faixa, vitrine), false);
+  assert.equal(pecaDeArteMelhor(cabeca, vitrine), false);
+  assert.equal(pecaDeArteMelhor(faixa, cabeca), false);
+  // arte que não é da Steam (escolha manual no painel) fica intocada
+  assert.equal(pecaDeArteMelhor("https://meu-cdn.exemplo/capa.jpg", faixa), false);
+  // sem peça nova, nada muda
+  assert.equal(pecaDeArteMelhor(null, null), false);
+  assert.equal(pecaDeArteMelhor(capa, ""), false);
 });

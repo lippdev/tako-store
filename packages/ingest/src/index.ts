@@ -4,7 +4,13 @@
 // O vínculo ambíguo não é decidido aqui: título exato, edição e plataforma iguais entram aprovados; o resto vai para
 // a fila do painel. Reimportar não duplica oferta: a chave é produto + loja + fonte + região + plataforma.
 
-import { suggestProduct, validateOfferRow, type ConnectorOutput, type RawOffer } from "@tako/connectors";
+import {
+  pecaDeArteMelhor,
+  suggestProduct,
+  validateOfferRow,
+  type ConnectorOutput,
+  type RawOffer,
+} from "@tako/connectors";
 import type { Source } from "@tako/domain";
 import { foldText, slugify } from "@tako/domain";
 import { collectForSource, type CollectOptions } from "./collect";
@@ -165,14 +171,29 @@ async function persistRow(cache: RunCache, source: Source, row: RawOffer): Promi
     };
   }
 
-  // Arte herói que faltou na criação: o jogo do vínculo aprovado ganha a peça quando ainda não tem.
-  if (row.heroUrl != null && row.heroUrl !== "") {
-    const produto = cache.products.find((candidate) => candidate.id === productId);
-    const jogo = produto === undefined ? undefined : cache.games.find((candidate) => candidate.id === produto.gameId);
-    if (jogo !== undefined && jogo.media.hero == null) {
-      await updateGame(jogo.id, { heroUrl: row.heroUrl });
+  // Arte do jogo do vínculo só melhora: completa o que faltou na criação e promove peça melhor — uma falha
+  // passageira de rede na conferência do CDN não pode deixar o jogo preso na arte de reserva (ver conectores).
+  const produto = cache.products.find((candidate) => candidate.id === productId);
+  const jogo = produto === undefined ? undefined : cache.games.find((candidate) => candidate.id === produto.gameId);
+  if (jogo !== undefined) {
+    const trocarCapa = pecaDeArteMelhor(jogo.media.cover, row.coverUrl);
+    const trocarHeroi = pecaDeArteMelhor(jogo.media.hero, row.heroUrl);
+    if (trocarCapa || trocarHeroi) {
+      await updateGame(jogo.id, {
+        ...(trocarCapa ? { coverUrl: row.coverUrl ?? null } : {}),
+        ...(trocarHeroi ? { heroUrl: row.heroUrl ?? null } : {}),
+      });
       cache.games = cache.games.map((candidate) =>
-        candidate.id === jogo.id ? { ...candidate, media: { ...candidate.media, hero: row.heroUrl ?? null } } : candidate,
+        candidate.id === jogo.id
+          ? {
+              ...candidate,
+              media: {
+                ...candidate.media,
+                cover: trocarCapa ? (row.coverUrl ?? null) : candidate.media.cover,
+                hero: trocarHeroi ? (row.heroUrl ?? null) : candidate.media.hero,
+              },
+            }
+          : candidate,
       );
     }
   }
