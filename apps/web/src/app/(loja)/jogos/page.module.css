@@ -91,3 +91,26 @@
     position: static;
   }
 }
+
+.paginacao {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 24px;
+}
+.paginaLink {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 6px 14px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-control);
+  color: var(--text);
+  font-family: var(--font-heading);
+  font-size: 13px;
+  text-decoration: none;
+}
+.paginaLink:hover {
+  background: var(--glass-hover);
+}
