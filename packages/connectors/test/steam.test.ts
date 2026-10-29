@@ -1,7 +1,15 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { capaDeBiblioteca, steamConnector, steamFeaturedItems, steamRefresh, steamRow } from "../src/steam";
+import {
+  capaDeBiblioteca,
+  pecaDaBiblioteca,
+  steamConnector,
+  steamAppDetails,
+  steamFeaturedItems,
+  steamRefresh,
+  steamRow,
+} from "../src/steam";
 
 const APPDETALHES = {
   "42420": {
@@ -118,7 +126,8 @@ test("falha da Steam vira erro com mensagem, não exceção crua", async () => {
   }
 });
 
-test("capa do cartão vem da biblioteca (2:3) quando a peça existe", async () => {  const original = globalThis.fetch;
+test("capa do cartão vem da biblioteca (2:3) quando a peça existe", async () => {
+  const original = globalThis.fetch;
   globalThis.fetch = (async (_url, init) =>
     init?.method === "HEAD"
       ? new Response(null, { status: 200 })
@@ -169,6 +178,52 @@ test("atualização reconsulta os apps dados e recusa o sem preço sem parar", a
     // o sem preço é recusa silenciosa (gratuito é esperado), e a passada não para por isso
     assert.deepEqual(result.errors, []);
     assert.equal(pedidos.length, 2);
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+test("herói do banner vem da peça própria, e a da vitrine fica de reserva", async () => {
+  const original = globalThis.fetch;
+  globalThis.fetch = (async (url, init) => {
+    const endereco = String(url);
+    if (init?.method === "HEAD") {
+      // 42420 tem as duas peças; 620 não tem nenhuma
+      if (endereco.includes("library_600x900")) return new Response(null, { status: 200 });
+      if (endereco.includes("42420")) return new Response(null, { status: 200 });
+      if (endereco.includes("620")) return new Response(null, { status: 404 });
+    }
+    const appid = endereco.match(/appids=(\d+)/)?.[1] ?? "";
+    return new Response(JSON.stringify({ [appid]: (APPDETALHES as Record<string, unknown>)[appid] }), { status: 200, headers: { "content-type": "application/json" } });
+  }) as typeof fetch;
+  try {
+    const primeira = await steamAppDetails(42420);
+    assert.ok(primeira.ok);
+    assert.equal(primeira.row["heroUrl"], pecaDaBiblioteca(42420, "hero_capsule"));
+    const segunda = await steamAppDetails(620);
+    assert.ok(segunda.ok);
+    assert.equal(segunda.row["heroUrl"], "https://shared.akamai.steamstatic.com/portal.jpg");
+  } finally {
+    globalThis.fetch = original;
+  }
+});
+
+test("sem as peças de herói, a cabeça da biblioteca cobre o banner", async () => {
+  const original = globalThis.fetch;
+  globalThis.fetch = (async (url, init) => {
+    const endereco = String(url);
+    if (init?.method === "HEAD") {
+      if (endereco.includes("library_600x900")) return new Response(null, { status: 200 });
+      // hero_capsule 404; library_header existe
+      return new Response(null, { status: endereco.includes("hero_capsule") ? 404 : 200 });
+    }
+    const appid = endereco.match(/appids=(\d+)/)?.[1] ?? "";
+    return new Response(JSON.stringify({ [appid]: (APPDETALHES as Record<string, unknown>)[appid] }), { status: 200, headers: { "content-type": "application/json" } });
+  }) as typeof fetch;
+  try {
+    const resultado = await steamAppDetails(42420);
+    assert.ok(resultado.ok);
+    assert.equal(resultado.row["heroUrl"], pecaDaBiblioteca(42420, "library_header"));
   } finally {
     globalThis.fetch = original;
   }
