@@ -1,4 +1,4 @@
-import { listAllBanners, listAllGames, listAllSections, listHomeVersions, listStores } from "@tako/db";
+import { listAllBanners, listAllGames, listAllSections, listDiscountedGames, listHomeVersions, listStores } from "@tako/db";
 import {
   alternarBanner,
   alternarSecao,
@@ -35,12 +35,13 @@ function descreveRegra(rule: { kind: string } & Record<string, unknown>): string
 /** Gestão da home: seções, regra, ordem, janela e publicação (PRD §12.4). */
 export default async function HomeAdminPage({ searchParams }: { searchParams: Promise<{ ok?: string; erro?: string }> }) {
   const { ok, erro } = await searchParams;
-  const [sections, banners, games, stores, versions] = await Promise.all([
+  const [sections, banners, games, stores, versions, promos] = await Promise.all([
     listAllSections(),
     listAllBanners(),
     listAllGames(),
     listStores(),
     listHomeVersions(8),
+    listDiscountedGames(),
   ]);
 
   return (
@@ -136,11 +137,24 @@ export default async function HomeAdminPage({ searchParams }: { searchParams: Pr
               <span>Jogo (opcional)</span>
               <select name="jogoId" defaultValue="">
                 <option value="">Nenhum (leva ao catálogo)</option>
-                {games.map((game) => (
-                  <option key={game.id} value={game.id}>
-                    {game.title}
-                  </option>
-                ))}
+                {promos.length > 0 && (
+                  <optgroup label={`Em promoção agora (${String(promos.length)})`}>
+                    {promos.map((promo) => (
+                      <option key={promo.id} value={promo.id}>
+                        {promo.title} (-{String(promo.discount)}%)
+                      </option>
+                    ))}
+                  </optgroup>
+                )}
+                <optgroup label="Todos os jogos">
+                  {games
+                    .filter((game) => game.published && !game.archived && !promos.some((promo) => promo.id === game.id))
+                    .map((game) => (
+                      <option key={game.id} value={game.id}>
+                        {game.title}
+                      </option>
+                    ))}
+                </optgroup>
               </select>
             </label>
             <label className={styles["field"]}>

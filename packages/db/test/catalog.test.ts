@@ -8,6 +8,7 @@ import { after, before, describe, it } from "node:test";
 import {
   closePool,
   getPool,
+  listDiscountedGames,
   listOffersForProducts,
   listProducts,
   listPublishedGames,
@@ -245,6 +246,14 @@ describe("menor preço elegível sobre o catálogo de teste", () => {
   it("informa ao menos uma oferta com cupom, como as figuras desenham", (t) => {
     if (!online) return t.skip("sem banco");
     assert.ok(offers.some((offer) => offer.conditions.coupon !== null));
+  });
+
+  it("o jogo com desconto entra na lista de promoções do momento", async (t) => {
+    if (!online) return t.skip("sem banco");
+    const promos = await listDiscountedGames();
+    const jardim = promos.find((promo) => promo.id === gameId("teste-jardim"));
+    assert.ok(jardim !== undefined, "a figura com 50% de desconto entra na lista");
+    assert.equal(jardim.discount, 50);
   });
 
   it("exclui a loja desativada da comparação", (t) => {
