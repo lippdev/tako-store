@@ -113,6 +113,11 @@ export function capaDeBiblioteca(appid: number | string): string {
   return `https://steamcdn-a.akamaihd.net/steam/apps/${String(appid)}/library_600x900.jpg`;
 }
 
+/** Peças de arte da biblioteca da Steam, por app, na ordem do consumo: herói do banner e cabeça da biblioteca. */
+export function pecaDaBiblioteca(appid: number | string, peca: "hero_capsule" | "library_header"): string {
+  return `https://steamcdn-a.akamaihd.net/steam/apps/${String(appid)}/${peca}.jpg`;
+}
+
 async function existeNoCdn(url: string): Promise<boolean> {
   try {
     const response = await fetch(url, { method: "HEAD", signal: AbortSignal.timeout(5_000) });
@@ -126,6 +131,19 @@ async function existeNoCdn(url: string): Promise<boolean> {
 export async function capaNoFormatoDoCartao(appid: number | string, reserva: string | null): Promise<string | null> {
   const biblioteca = capaDeBiblioteca(appid);
   return (await existeNoCdn(biblioteca)) ? biblioteca : reserva;
+}
+
+/**
+ * Herói do banner, na ordem da peça certa: a cápsula de herói da biblioteca (1920×620, feita para faixas largas),
+ * depois a cabeça da biblioteca (920×430); a cabeça pequena da vitrine fica de reserva. Medição de 10/2026:
+ * hero_capsule existe para ~80% dos apps, library_header cobre parte do resto.
+ */
+export async function heroNoFormatoDoBanner(appid: number | string, reserva: string | null): Promise<string | null> {
+  for (const peca of ["hero_capsule", "library_header"] as const) {
+    const url = pecaDaBiblioteca(appid, peca);
+    if (await existeNoCdn(url)) return url;
+  }
+  return reserva;
 }
 
 /** Item da vitrine na forma que o validador entende. Moeda fora do BRL e preço zero são recusados no validador. */
@@ -232,7 +250,10 @@ export async function steamAppDetails(
         appid,
         typeof app["header_image"] === "string" ? app["header_image"] : null,
       ),
-      heroUrl: typeof app["header_image"] === "string" ? app["header_image"] : null,
+      heroUrl: await heroNoFormatoDoBanner(
+        appid,
+        typeof app["header_image"] === "string" ? app["header_image"] : null,
+      ),
       description: typeof app["short_description"] === "string" ? stripHtml(app["short_description"]) : null,
       genres,
       operatingSystems: sistemas,

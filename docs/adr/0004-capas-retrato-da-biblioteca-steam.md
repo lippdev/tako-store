@@ -46,3 +46,16 @@ O ajuste é no **recebimento**, não no card:
 - **Recortar no servidor e hospedar a imagem.** Rejeitada por ora: duplicaria a arte, exigiria processamento e
   armazenamento próprios e criaria responsabilidade de direitos sobre imagem já oficial da Steam. Reavaliar só
   quando existir cache de imagens no projeto (CAT-005).
+
+## Herói do banner (adendo de 29/10/2026)
+
+A arte herói do banner da home merece a peça feita para o consumo. A cabeça da vitrine (`header.jpg`, 460×215)
+é arte de card — esticada num banner largo, fica ruim. O conector grava o `heroUrl` pela mesma lógica da capa,
+com a cadeia da peça certa primeiro:
+
+1. `hero_capsule.jpg` (1920×620) — a peça própria de herói; existe para ~80% dos apps (medição de amostra).
+2. `library_header.jpg` (920×430) — a cabeça da biblioteca, maior que a da vitrine.
+3. `header.jpg` — reserva final, para os apps sem nenhuma das duas.
+
+A importação grava na criação e completa o jogo do vínculo aprovado que ainda não tem a peça — a sincronização
+periódica também é o backfill do herói.
