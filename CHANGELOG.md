@@ -3,6 +3,46 @@
 Formato: [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/). Versões seguem
 [SemVer](https://semver.org/lang/pt-BR/).
 
+## [0.4.0] — 2026-10-29
+
+O catálogo deixa de ser demonstração: **736 jogos reais da Steam com preço em BRL**, coletados, renovados e
+comparados — e o resto do demo sai da loja.
+
+### Adicionado
+
+- **Catálogo real da Steam (OFR-008)**: conector público da vitrine (`featuredcategories`) em BRL e **rastreio
+  amplo** pela prioridade do SteamSpy (`worker crawl --source steam --topo N`), com pausa de 1,5 s, recusa de
+  não-jogo/gratuito/outra moeda com código e parada no limite. Jogo criado da fonte nasce publicado.
+- **Sincronização de preços (OFR-007)**: `worker sync --source steam` reconsulta o lote com a observação mais
+  antiga e regrava as ofertas — o catálogo inteiro se renova dentro da validade de 24 h; o agendador processa um
+  lote por passada devida.
+- **Arte na proporção de cada consumo ([ADR-0004](docs/adr/0004-arte-da-steam-na-proporcao-de-cada-consumo.md))**:
+  capa retrata 2:3 da biblioteca nos cards, faixa de herói 1920×620 no banner da home (que assume a proporção da
+  peça — nada de recorte), miniatura da busca em 2:3 e a regra "arte só melhora, nunca rebaixa".
+- **Painel**: exportar/importar catálogo em JSON com prévia e aplicação transacional; publicar/ocultar/arquivar em
+  lote; criar produto pela fila de vínculos com decisões em lote; rascunho e versões da home com restauração;
+  pré-visualização da home mostrando seções ocultas; seletor de banner com o grupo **"Em promoção agora"** (jogos
+  com oferta descontada, do maior desconto para o menor).
+- **Loja**: catálogo paginado no servidor (60 por página: 160 KB e 0,7 s, contra 1,5 MB e 3,2 s); carrossel de
+  destaques com evidência de promoção (preço, referência riscada e selo de desconto ao vivo); imagem OG com
+  fallback de capa.
+- **Segurança e operação**: limite de tentativas de login, segredo de afiliado que nunca reaparece, guarda de SSRF
+  no feed por URL, página `/privacidade`, retenção de tentativas/cliques/erros.
+- **Documentação**: mapa das APIs das lojas e o guia de cadastro de afiliados (`docs/integracoes.md` §6–7), o
+  coletor de anunciantes no PRD (PAR-005) e a lista das dependências que esperam o responsável (§21).
+
+### Alterado
+
+- **Catálogo de demonstração removido da loja**: os 12 jogos de demonstração ficam arquivados e as 4 lojas demo,
+  desativadas; o aviso de ambiente de demonstração sai com `DEMO_CATALOG=0`; o seed se recusa a apagar dado real
+  sem `SEED_DEMO=1`.
+
+### Notas
+
+- A comparação real continua limitada ao que a Steam cobre; as demais lojas esperam aprovação de afiliados — a
+  lista de cadastros está em `docs/integracoes.md` §7.
+- Uso comercial da API pública da Steam a confirmar antes do lançamento público (OPS-003).
+
 ## [0.3.0] — 2026-10-27
 
 Deixa a operação ligável sem código: chave de afiliado no painel, fonte real por URL, coleta automática e o que
