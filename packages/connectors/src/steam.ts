@@ -313,6 +313,33 @@ export async function steamKnownAppids(sourceId: string, ids: readonly number[])
  * Rastreador (OFR-008): prioridade da SteamSpy, detalhe da vitrine em BRL, um pedido por app, pausando entre
  * pedidos. Página de loja ausente, gratuito e não-jogo ficam no relatório.
  */
+/**
+ * Consulta cada appid dado no `appdetails`, em ritmo do limite da vitrine; limite e rede param a passada —
+ * melhor voltar depois do que martelar o limite. O que já veio continua valendo.
+ */
+async function coletarAppDetails(ids: readonly number[], delayMs: number): Promise<ConnectorOutput> {
+  const rows: RawOffer[] = [];
+  const errors: RowError[] = [];
+  const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+  for (const appid of ids) {
+    const result = await steamAppDetails(appid);
+    if (result.ok) {
+      const validated = validateOfferRow(result.row, null);
+      if (validated.ok) rows.push(validated.row);
+      else errors.push(validated.error);
+    } else if (result.code !== "indisponivel" && result.code !== "gratuito" && result.code !== "nao-jogo") {
+      errors.push({ line: null, code: result.code, message: `app ${String(appid)}: ${result.message}` });
+      if (result.code === "limite" || result.code === "rede") break;
+    }
+    await sleep(delayMs);
+  }
+  return { rows, errors };
+}
+
+/**
+ * Rastreio amplo: os apps da lista de prioridade do SteamSpy que a fonte ainda não conhece, até `topo` por
+ * execução. O catálogo cresce por aqui.
+ */
 export async function steamCrawl(options: {
   topo?: number;
   delayMs?: number;
@@ -324,22 +351,16 @@ export async function steamCrawl(options: {
   const all = await steamSpyTopAppids();
   const known = options.sourceId === undefined ? new Set<number>() : await steamKnownAppids(options.sourceId, all);
   const ids = all.filter((id) => !known.has(id)).slice(0, top);
-  const rows: RawOffer[] = [];
-  const errors: RowError[] = [];
-  const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
-  for (const appid of ids) {
-    const result = await steamAppDetails(appid);
-    if (result.ok) {
-      const validated = validateOfferRow(result.row, null);
-      if (validated.ok) rows.push(validated.row);
-      else errors.push(validated.error);
-    } else if (result.code !== "indisponivel" && result.code !== "gratuito" && result.code !== "nao-jogo") {
-      // Limite e rede param o rastreador: melhor voltar depois do que martelar o limite. O que já veio
-      // continua valendo — a próxima execução retoma do que falta.
-      errors.push({ line: null, code: result.code, message: `app ${String(appid)}: ${result.message}` });
-      if (result.code === "limite" || result.code === "rede") break;
-    }
-    await sleep(delayMs);
-  }
-  return { rows, errors };
+  return coletarAppDetails(ids, delayMs);
+}
+
+/**
+ * Atualização do catálogo: reconsulta os apps cuja observação é a mais antiga, na ordem recebida. Não busca
+ * lista nova — quem escolhe a ordem é quem chama (o worker pega a observação mais velha primeiro).
+ */
+export async function steamRefresh(
+  ids: readonly number[],
+  delayMs: number = STEAM_CRAWL_DELAY_MS,
+): Promise<ConnectorOutput> {
+  return coletarAppDetails(ids, delayMs);
 }

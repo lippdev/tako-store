@@ -121,7 +121,11 @@ npm run worker -- crawl --source steam --topo 500
   continua de onde parou.
 - App já conhecido da fonte é pulado: repetir o mesmo `--topo N` custa poucas consultas e traz só o novo.
 - A lista de 1.000 apps de prioridade do SteamSpy está **esgotada** (736 jogos publicados; a repetição completa
-  traz 0 novo). Catálogo maior exige outra lista ou outra fonte.
+  traz 0 jogo novo). Catálogo maior exige outra lista ou outra fonte.
+- **Atualização do que já existe (OFR-007)**: `npm run worker -- sync --source steam [--lote 250]` reconsulta o
+  lote dos apps com a observação mais antiga e regrava as ofertas — é o que impede o preço de vencer e o jogo sair
+  da comparação (uma volta completa leva ~18 min a 1,5 s por app). O agendador (`due`/`daemon`) faz um lote por
+  passada quando a fonte está devida, junto da coleta de destaques.
 - **Backfill de capas** do catálogo já importado: `node scripts/backfill-covers-steam.mjs` (relata o que ficou
   de fora, com motivo).
 
